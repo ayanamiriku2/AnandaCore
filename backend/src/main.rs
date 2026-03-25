@@ -38,18 +38,36 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let config = AppConfig::from_env()?;
+    let config = match AppConfig::from_env() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Failed to load configuration: {}", e);
+            tracing::error!("Make sure DATABASE_URL and JWT_SECRET are set");
+            return Err(e);
+        }
+    };
 
+    tracing::info!("Connecting to database...");
     let pool = PgPoolOptions::new()
         .max_connections(20)
         .connect(&config.database_url)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to connect to database: {}", e);
+            e
+        })?;
 
     tracing::info!("Running database migrations...");
     sqlx::migrate!("./migrations").run(&pool).await?;
     tracing::info!("Migrations complete");
 
-    let storage = storage::StorageService::new(&config).await?;
+    tracing::info!("Connecting to S3/MinIO at {}...", config.s3_endpoint);
+    let storage = storage::StorageService::new(&config).await
+        .map_err(|e| {
+            tracing::error!("Failed to connect to S3/MinIO: {}", e);
+            tracing::error!("Check S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY");
+            e
+        })?;
 
     let state = Arc::new(AppState {
         db: pool,

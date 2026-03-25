@@ -1,4 +1,8 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+
+fn require_env(name: &str) -> Result<String> {
+    std::env::var(name).with_context(|| format!("Missing required environment variable: {}", name))
+}
 
 #[derive(Clone, Debug)]
 pub struct AppConfig {
@@ -19,13 +23,17 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn from_env() -> Result<Self> {
+        // Use Railway's PORT if APP_PORT is not set
+        let port = std::env::var("APP_PORT")
+            .or_else(|_| std::env::var("PORT"))
+            .unwrap_or_else(|_| "8080".into())
+            .parse()?;
+
         Ok(Self {
-            database_url: std::env::var("DATABASE_URL")?,
+            database_url: require_env("DATABASE_URL")?,
             host: std::env::var("APP_HOST").unwrap_or_else(|_| "0.0.0.0".into()),
-            port: std::env::var("APP_PORT")
-                .unwrap_or_else(|_| "8080".into())
-                .parse()?,
-            jwt_secret: std::env::var("JWT_SECRET")?,
+            port,
+            jwt_secret: require_env("JWT_SECRET")?,
             jwt_expiry_hours: std::env::var("JWT_EXPIRY_HOURS")
                 .unwrap_or_else(|_| "24".into())
                 .parse()?,
