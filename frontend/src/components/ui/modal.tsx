@@ -44,7 +44,7 @@ export function Modal({
     <div
       ref={overlayRef}
       className={cn(
-        "fixed inset-0 z-50 flex items-center justify-center bg-black/50 transition-opacity",
+        "fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 transition-opacity p-0 sm:p-4",
         open ? "opacity-100" : "opacity-0"
       )}
       onClick={(e) => {
@@ -53,19 +53,19 @@ export function Modal({
     >
       <div
         className={cn(
-          "relative max-h-[90vh] overflow-y-auto rounded-lg bg-white shadow-xl transition-transform",
+          "relative max-h-[85vh] sm:max-h-[90vh] overflow-y-auto rounded-t-xl sm:rounded-lg bg-white shadow-xl transition-transform",
           open ? "scale-100" : "scale-95",
           {
-            "w-full max-w-sm": size === "sm",
-            "w-full max-w-lg": size === "md",
-            "w-full max-w-2xl": size === "lg",
-            "w-full max-w-4xl": size === "xl",
+            "w-full sm:max-w-sm": size === "sm",
+            "w-full sm:max-w-lg": size === "md",
+            "w-full sm:max-w-2xl": size === "lg",
+            "w-full sm:max-w-4xl": size === "xl",
           },
           className
         )}
       >
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <h2 className="text-lg font-semibold">{title}</h2>
+        <div className="flex items-center justify-between border-b px-4 sm:px-6 py-4 sticky top-0 bg-white z-10">
+          <h2 className="text-base sm:text-lg font-semibold pr-2">{title}</h2>
           <button
             onClick={onClose}
             className="rounded-md p-1 hover:bg-gray-100"
@@ -73,7 +73,7 @@ export function Modal({
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </div>
     </div>
   );

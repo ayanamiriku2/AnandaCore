@@ -167,9 +167,9 @@ export default function ProgramsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Program</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Program</h1>
           <p className="text-[var(--muted-foreground)]">
             Kelola program dan proyek yayasan
           </p>
@@ -179,7 +179,7 @@ export default function ProgramsPage() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
@@ -192,7 +192,7 @@ export default function ProgramsPage() {
         <Select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-40"
+          className="w-full sm:w-40"
         >
           <option value="">Semua Status</option>
           <option value="planning">Perencanaan</option>
@@ -220,7 +220,7 @@ export default function ProgramsPage() {
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium">Kode</label>
               <Input

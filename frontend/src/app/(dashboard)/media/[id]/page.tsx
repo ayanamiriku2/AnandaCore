@@ -139,7 +139,7 @@ export default function MediaAlbumDetailPage() {
                 <FolderOpen className="h-5 w-5 text-violet-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">{album.title}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold">{album.title}</h1>
                 <div className="flex items-center gap-2 mt-0.5 text-sm text-gray-500">
                   {album.album_date && <span>{formatDate(album.album_date)}</span>}
                   <span>{assets?.length ?? 0} media</span>

@@ -139,7 +139,7 @@ export default function LetterDetailPage() {
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{letter.subject}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold">{letter.subject}</h1>
               {isDeleted && <Badge variant="danger">Dihapus</Badge>}
             </div>
             <div className="mt-1 flex items-center gap-3 text-sm text-gray-500">
@@ -187,7 +187,7 @@ export default function LetterDetailPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2 space-y-6">
             <div className="rounded-lg border p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <InfoField
                   icon={<User className="h-4 w-4" />}
                   label="Pengirim"

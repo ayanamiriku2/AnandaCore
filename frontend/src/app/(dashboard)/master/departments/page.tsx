@@ -104,9 +104,9 @@ export default function DepartmentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Departemen</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Departemen</h1>
           <p className="text-[var(--muted-foreground)]">
             Kelola departemen yayasan
           </p>
@@ -129,7 +129,7 @@ export default function DepartmentsPage() {
         title={editItem ? "Edit Departemen" : "Tambah Departemen Baru"}
       >
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium">Kode</label>
               <Input

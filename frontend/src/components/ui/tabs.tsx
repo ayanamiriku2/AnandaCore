@@ -18,8 +18,8 @@ interface TabsProps {
 
 export function Tabs({ tabs, activeTab, onChange, className }: TabsProps) {
   return (
-    <div className={cn("border-b border-gray-200", className)}>
-      <nav className="-mb-px flex gap-4" aria-label="Tabs">
+    <div className={cn("border-b border-gray-200 overflow-x-auto", className)}>
+      <nav className="-mb-px flex gap-2 sm:gap-4 min-w-max" aria-label="Tabs">
         {tabs.map((tab) => (
           <button
             key={tab.id}

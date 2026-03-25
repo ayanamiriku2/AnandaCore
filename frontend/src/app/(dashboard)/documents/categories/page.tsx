@@ -25,7 +25,7 @@ export default function DocumentCategoriesPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Kategori Dokumen</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Kategori Dokumen</h1>
         <p className="text-[var(--muted-foreground)]">
           Daftar kategori untuk pengarsipan dokumen
         </p>

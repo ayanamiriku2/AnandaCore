@@ -95,7 +95,7 @@ export function DataTable<T extends object>({
         </table>
       </div>
       {page && totalPages && onPageChange && (
-        <div className="flex items-center justify-between px-2 py-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-2 py-4">
           <p className="text-sm text-[var(--muted-foreground)]">
             {total !== undefined ? `Total: ${total} data` : ""}
           </p>

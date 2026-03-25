@@ -163,7 +163,7 @@ export default function PartnerDetailPage() {
                 <Building2 className="h-5 w-5 text-blue-500" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">{partner.name}</h1>
+                <h1 className="text-xl sm:text-2xl font-bold">{partner.name}</h1>
                 <div className="flex items-center gap-2 mt-0.5">
                   {partner.partner_type && (
                     <Badge variant="info">{partner.partner_type}</Badge>
@@ -213,7 +213,7 @@ export default function PartnerDetailPage() {
               <h3 className="mb-4 text-sm font-semibold text-gray-500 uppercase tracking-wider">
                 Informasi Kontak
               </h3>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {partner.email && (
                   <div className="flex items-center gap-2 text-sm">
                     <Mail className="h-4 w-4 text-gray-400" /> {partner.email}

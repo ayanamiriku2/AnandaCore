@@ -175,9 +175,9 @@ export default function TasksPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Tugas</h1>
+          <h1 className="text-xl sm:text-2xl font-bold">Tugas</h1>
           <p className="text-[var(--muted-foreground)]">
             Kelola tugas dan penugasan
           </p>
@@ -187,7 +187,7 @@ export default function TasksPage() {
         </Button>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <Input
@@ -200,7 +200,7 @@ export default function TasksPage() {
         <Select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="w-40"
+          className="w-full sm:w-40"
         >
           <option value="">Semua Status</option>
           <option value="pending">Pending</option>

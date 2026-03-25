@@ -47,7 +47,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Laporan</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Laporan</h1>
         <p className="text-[var(--muted-foreground)]">
           Buat dan unduh laporan yayasan
         </p>

@@ -125,7 +125,7 @@ export default function DocumentDetailPage() {
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">{doc.title}</h1>
+              <h1 className="text-xl sm:text-2xl font-bold">{doc.title}</h1>
               {isDeleted && (
                 <Badge variant="danger">Dihapus</Badge>
               )}

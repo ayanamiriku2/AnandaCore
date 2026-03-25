@@ -63,7 +63,7 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Profil Saya</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">Profil Saya</h1>
         <p className="text-[var(--muted-foreground)]">
           Lihat dan perbarui informasi akun Anda
         </p>
@@ -94,7 +94,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 rounded-lg border p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border p-4">
             <div>
               <p className="text-xs text-gray-500">Status</p>
               <Badge variant={user.is_active ? "success" : "default"}>

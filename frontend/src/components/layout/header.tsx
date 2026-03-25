@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Search, LogOut, User, Check } from "lucide-react";
+import { Bell, Search, LogOut, User, Check, Menu } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getInitials, formatDate } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
@@ -17,14 +17,20 @@ interface Notification {
   created_at: string;
 }
 
-export function Header() {
+interface HeaderProps {
+  onMenuToggle: () => void;
+}
+
+export function Header({ onMenuToggle }: HeaderProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { data: notifications } = useQuery<Notification[]>({
     queryKey: ["notifications"],
@@ -69,20 +75,46 @@ export function Header() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
+  useEffect(() => {
+    if (showSearch && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [showSearch]);
+
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-[var(--border)] bg-white px-6">
-      <div className="flex items-center gap-4">
-        <div className="relative">
+    <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center justify-between border-b border-[var(--border)] bg-white px-3 sm:px-4 lg:px-6 gap-2">
+      {/* Left: hamburger + search */}
+      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+        <button
+          onClick={onMenuToggle}
+          className="rounded-md p-2 hover:bg-gray-100 lg:hidden shrink-0"
+          aria-label="Menu"
+        >
+          <Menu className="h-5 w-5 text-gray-600" />
+        </button>
+
+        {/* Desktop search */}
+        <div className="relative hidden sm:block flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Cari dokumen, surat, program..."
-            className="h-9 w-80 rounded-md border border-[var(--border)] bg-gray-50 pl-10 pr-4 text-sm focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+            className="h-9 w-full rounded-md border border-[var(--border)] bg-gray-50 pl-10 pr-4 text-sm focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
           />
         </div>
+
+        {/* Mobile search toggle */}
+        <button
+          onClick={() => setShowSearch(!showSearch)}
+          className="rounded-md p-2 hover:bg-gray-100 sm:hidden shrink-0"
+          aria-label="Cari"
+        >
+          <Search className="h-5 w-5 text-gray-600" />
+        </button>
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Right: notifications + profile */}
+      <div className="flex items-center gap-1 sm:gap-3 shrink-0">
         <div className="relative" ref={notifRef}>
           <button
             onClick={() => {
@@ -100,7 +132,7 @@ export function Header() {
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 top-12 w-80 rounded-md border bg-white shadow-lg">
+            <div className="absolute right-0 top-12 w-[calc(100vw-2rem)] sm:w-80 max-w-sm rounded-md border bg-white shadow-lg">
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <h3 className="text-sm font-semibold">Notifikasi</h3>
                 {unreadCount > 0 && (
@@ -109,7 +141,7 @@ export function Header() {
                     className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
                   >
                     <Check className="h-3 w-3" />
-                    Tandai semua dibaca
+                    Tandai semua
                   </button>
                 )}
               </div>
@@ -160,7 +192,7 @@ export function Header() {
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-xs font-medium text-white">
               {user ? getInitials(user.full_name) : "?"}
             </div>
-            <div className="hidden text-left md:block">
+            <div className="hidden text-left lg:block">
               <p className="text-sm font-medium">{user?.full_name}</p>
               <p className="text-xs text-[var(--muted-foreground)]">
                 {user?.roles?.[0] || ""}
@@ -189,6 +221,22 @@ export function Header() {
           )}
         </div>
       </div>
+
+      {/* Mobile search bar (expandable below header) */}
+      {showSearch && (
+        <div className="absolute left-0 top-full w-full border-b bg-white px-3 py-2 sm:hidden">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Cari dokumen, surat, program..."
+              className="h-9 w-full rounded-md border border-[var(--border)] bg-gray-50 pl-10 pr-4 text-sm focus:border-[var(--primary)] focus:outline-none focus:ring-1 focus:ring-[var(--primary)]"
+              onBlur={() => setShowSearch(false)}
+            />
+          </div>
+        </div>
+      )}
     </header>
   );
 }
