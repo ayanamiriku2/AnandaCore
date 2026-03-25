@@ -7,7 +7,10 @@ export const metadata: Metadata = {
   title: "AnandaCore - Sistem Manajemen Yayasan",
   description: "Sistem manajemen internal Yayasan Kasih Ananda",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/logo-192.png", type: "image/png", sizes: "192x192" },
+    ],
     apple: "/logo-192.png",
   },
 };
