@@ -82,6 +82,14 @@ async fn main() -> Result<()> {
         .allow_credentials(true);
 
     let app = Router::new()
+        .route("/", axum::routing::get(|| async {
+            axum::Json(serde_json::json!({
+                "service": "AnandaCore API",
+                "status": "running",
+                "version": env!("CARGO_PKG_VERSION"),
+                "docs": "/api/health"
+            }))
+        }))
         .nest("/api", routes::api_routes(state.clone()))
         .layer(cors)
         .layer(TraceLayer::new_for_http());
