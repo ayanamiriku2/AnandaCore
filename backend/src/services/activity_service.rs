@@ -29,17 +29,42 @@ pub async fn create_activity(pool: &PgPool, req: CreateActivityRequest, user_id:
 }
 
 pub async fn list_activities(pool: &PgPool, pagination: &PaginationParams, filter: &ActivityFilter) -> Result<PaginatedResponse<Activity>, AppError> {
-    let mut conditions = vec!["deleted_at IS NULL".to_string()];
-    if let Some(pid) = filter.program_id { conditions.push(format!("program_id = '{}'", pid)); }
-    if let Some(ref s) = filter.status { conditions.push(format!("status = '{}'", s)); }
-    let where_clause = conditions.join(" AND ");
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM activities WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL OR program_id = $1) \
+         AND ($2::text IS NULL OR status = $2) \
+         AND ($3::date IS NULL OR activity_date >= $3) \
+         AND ($4::date IS NULL OR activity_date <= $4) \
+         AND ($5::uuid IS NULL OR location_id = $5) \
+         AND ($6::text IS NULL OR name ILIKE '%' || $6 || '%' OR description ILIKE '%' || $6 || '%')"
+    )
+    .bind(filter.program_id)
+    .bind(&filter.status)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(filter.location_id)
+    .bind(&filter.search)
+    .fetch_one(pool).await.unwrap_or(0);
 
-    let total: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM activities WHERE {}", where_clause))
-        .fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, Activity>(
-        &format!("SELECT * FROM activities WHERE {} ORDER BY activity_date DESC LIMIT {} OFFSET {}",
-            where_clause, pagination.per_page(), pagination.offset())
-    ).fetch_all(pool).await?;
+        "SELECT * FROM activities WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL OR program_id = $1) \
+         AND ($2::text IS NULL OR status = $2) \
+         AND ($3::date IS NULL OR activity_date >= $3) \
+         AND ($4::date IS NULL OR activity_date <= $4) \
+         AND ($5::uuid IS NULL OR location_id = $5) \
+         AND ($6::text IS NULL OR name ILIKE '%' || $6 || '%' OR description ILIKE '%' || $6 || '%') \
+         ORDER BY activity_date DESC LIMIT $7 OFFSET $8"
+    )
+    .bind(filter.program_id)
+    .bind(&filter.status)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(filter.location_id)
+    .bind(&filter.search)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
+    .fetch_all(pool).await?;
 
     Ok(PaginatedResponse::new(data, total, pagination))
 }

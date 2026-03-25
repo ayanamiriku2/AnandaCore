@@ -27,17 +27,34 @@ pub async fn create_program(pool: &PgPool, req: CreateProgramRequest, user_id: U
 }
 
 pub async fn list_programs(pool: &PgPool, pagination: &PaginationParams, filter: &ProgramFilter) -> Result<PaginatedResponse<Program>, AppError> {
-    let mut conditions = vec!["deleted_at IS NULL".to_string()];
-    if let Some(ref s) = filter.status { conditions.push(format!("status = '{}'", s)); }
-    if let Some(did) = filter.department_id { conditions.push(format!("department_id = '{}'", did)); }
-    let where_clause = conditions.join(" AND ");
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM programs WHERE deleted_at IS NULL \
+         AND ($1::text IS NULL OR status = $1) \
+         AND ($2::uuid IS NULL OR department_id = $2) \
+         AND ($3::uuid IS NULL OR program_type_id = $3) \
+         AND ($4::text IS NULL OR name ILIKE '%' || $4 || '%' OR description ILIKE '%' || $4 || '%')"
+    )
+    .bind(&filter.status)
+    .bind(filter.department_id)
+    .bind(filter.program_type_id)
+    .bind(&filter.search)
+    .fetch_one(pool).await.unwrap_or(0);
 
-    let total: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM programs WHERE {}", where_clause))
-        .fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, Program>(
-        &format!("SELECT * FROM programs WHERE {} ORDER BY created_at DESC LIMIT {} OFFSET {}",
-            where_clause, pagination.per_page(), pagination.offset())
-    ).fetch_all(pool).await?;
+        "SELECT * FROM programs WHERE deleted_at IS NULL \
+         AND ($1::text IS NULL OR status = $1) \
+         AND ($2::uuid IS NULL OR department_id = $2) \
+         AND ($3::uuid IS NULL OR program_type_id = $3) \
+         AND ($4::text IS NULL OR name ILIKE '%' || $4 || '%' OR description ILIKE '%' || $4 || '%') \
+         ORDER BY created_at DESC LIMIT $5 OFFSET $6"
+    )
+    .bind(&filter.status)
+    .bind(filter.department_id)
+    .bind(filter.program_type_id)
+    .bind(&filter.search)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
+    .fetch_all(pool).await?;
 
     Ok(PaginatedResponse::new(data, total, pagination))
 }
@@ -50,9 +67,13 @@ pub async fn get_program(pool: &PgPool, id: Uuid) -> Result<Program, AppError> {
 
 pub async fn update_program(pool: &PgPool, id: Uuid, req: UpdateProgramRequest) -> Result<Program, AppError> {
     sqlx::query_as::<_, Program>(
-        "UPDATE programs SET name = COALESCE($2, name), description = COALESCE($3, description), status = COALESCE($4, status) WHERE id = $1 RETURNING *"
+        r#"UPDATE programs SET name = COALESCE($2, name), description = COALESCE($3, description),
+            status = COALESCE($4, status), objectives = COALESCE($5, objectives),
+            pic_user_id = COALESCE($6, pic_user_id), end_date = COALESCE($7, end_date)
+        WHERE id = $1 AND deleted_at IS NULL RETURNING *"#
     )
     .bind(id).bind(&req.name).bind(&req.description).bind(&req.status)
+    .bind(&req.objectives).bind(req.pic_user_id).bind(req.end_date)
     .fetch_one(pool).await.map_err(AppError::from)
 }
 

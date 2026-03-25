@@ -29,10 +29,10 @@ pub struct PartnerInteraction {
     pub interaction_type: Option<String>,
     pub subject: Option<String>,
     pub description: Option<String>,
-    pub interaction_date: Option<NaiveDate>,
+    pub interaction_date: DateTime<Utc>,
+    pub user_id: Option<Uuid>,
     pub follow_up_date: Option<NaiveDate>,
     pub follow_up_notes: Option<String>,
-    pub conducted_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -40,13 +40,12 @@ pub struct PartnerInteraction {
 pub struct PartnerOpportunity {
     pub id: Uuid,
     pub partner_id: Uuid,
+    pub opportunity_type: Option<String>,
     pub title: String,
     pub description: Option<String>,
-    pub value: Option<rust_decimal::Decimal>,
+    pub quota: Option<i32>,
+    pub deadline: Option<NaiveDate>,
     pub status: Option<String>,
-    pub probability: Option<i32>,
-    pub expected_close_date: Option<NaiveDate>,
-    pub actual_close_date: Option<NaiveDate>,
     pub assigned_to: Option<Uuid>,
     pub notes: Option<String>,
     pub created_by: Option<Uuid>,
@@ -89,6 +88,29 @@ pub struct CreateInteractionRequest {
     pub interaction_date: Option<NaiveDate>,
     pub follow_up_date: Option<NaiveDate>,
     pub follow_up_notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateOpportunityRequest {
+    pub opportunity_type: Option<String>,
+    pub title: String,
+    pub description: Option<String>,
+    pub quota: Option<i32>,
+    pub deadline: Option<NaiveDate>,
+    pub status: Option<String>,
+    pub assigned_to: Option<Uuid>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateOpportunityRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub quota: Option<i32>,
+    pub deadline: Option<NaiveDate>,
+    pub status: Option<String>,
+    pub assigned_to: Option<Uuid>,
+    pub notes: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -339,8 +361,8 @@ pub async fn create_interaction(
     let interaction = sqlx::query_as::<_, PartnerInteraction>(
         r#"INSERT INTO partner_interactions
                (partner_id, interaction_type, subject, description,
-                interaction_date, follow_up_date, follow_up_notes, conducted_by)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                interaction_date, follow_up_date, follow_up_notes, user_id)
+           VALUES ($1, $2, $3, $4, COALESCE($5::date, NOW()), $6, $7, $8)
            RETURNING *"#,
     )
     .bind(partner_id)
@@ -394,4 +416,84 @@ pub async fn restore(
     .ok_or_else(|| AppError::NotFound("Mitra tidak ditemukan atau belum dihapus".into()))?;
 
     Ok(Json(partner))
+}
+
+// ---------------------------------------------------------------------------
+// 14. opportunities – GET list for a partner
+// ---------------------------------------------------------------------------
+pub async fn opportunities(
+    State(state): State<Arc<AppState>>,
+    Path(partner_id): Path<Uuid>,
+) -> Result<Json<Vec<PartnerOpportunity>>, AppError> {
+    partner_service::get_partner(&state.db, partner_id).await?;
+    let rows = sqlx::query_as::<_, PartnerOpportunity>(
+        "SELECT * FROM partner_opportunities WHERE partner_id = $1 ORDER BY created_at DESC",
+    )
+    .bind(partner_id)
+    .fetch_all(&state.db)
+    .await?;
+    Ok(Json(rows))
+}
+
+// ---------------------------------------------------------------------------
+// 15. create_opportunity – POST new opportunity for a partner
+// ---------------------------------------------------------------------------
+pub async fn create_opportunity(
+    State(state): State<Arc<AppState>>,
+    Path(partner_id): Path<Uuid>,
+    axum::Extension(current): axum::Extension<CurrentUser>,
+    Json(req): Json<CreateOpportunityRequest>,
+) -> Result<Json<PartnerOpportunity>, AppError> {
+    partner_service::get_partner(&state.db, partner_id).await?;
+    let opp = sqlx::query_as::<_, PartnerOpportunity>(
+        r#"INSERT INTO partner_opportunities
+               (partner_id, opportunity_type, title, description, quota, deadline, status, assigned_to, notes, created_by)
+           VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, 'dibuka'), $8, $9, $10)
+           RETURNING *"#,
+    )
+    .bind(partner_id)
+    .bind(&req.opportunity_type)
+    .bind(&req.title)
+    .bind(&req.description)
+    .bind(req.quota)
+    .bind(req.deadline)
+    .bind(&req.status)
+    .bind(req.assigned_to)
+    .bind(&req.notes)
+    .bind(current.id)
+    .fetch_one(&state.db)
+    .await?;
+    Ok(Json(opp))
+}
+
+// ---------------------------------------------------------------------------
+// 16. update_opportunity – PUT update an opportunity
+// ---------------------------------------------------------------------------
+pub async fn update_opportunity(
+    State(state): State<Arc<AppState>>,
+    Path((partner_id, opp_id)): Path<(Uuid, Uuid)>,
+    Json(req): Json<UpdateOpportunityRequest>,
+) -> Result<Json<PartnerOpportunity>, AppError> {
+    partner_service::get_partner(&state.db, partner_id).await?;
+    let opp = sqlx::query_as::<_, PartnerOpportunity>(
+        r#"UPDATE partner_opportunities SET
+            title = COALESCE($3, title), description = COALESCE($4, description),
+            quota = COALESCE($5, quota), deadline = COALESCE($6, deadline),
+            status = COALESCE($7, status), assigned_to = COALESCE($8, assigned_to),
+            notes = COALESCE($9, notes), updated_at = NOW()
+        WHERE id = $2 AND partner_id = $1 RETURNING *"#,
+    )
+    .bind(partner_id)
+    .bind(opp_id)
+    .bind(&req.title)
+    .bind(&req.description)
+    .bind(req.quota)
+    .bind(req.deadline)
+    .bind(&req.status)
+    .bind(req.assigned_to)
+    .bind(&req.notes)
+    .fetch_optional(&state.db)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Lowongan tidak ditemukan".into()))?;
+    Ok(Json(opp))
 }

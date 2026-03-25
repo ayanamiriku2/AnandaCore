@@ -280,11 +280,27 @@ export interface PartnerInteraction {
   interaction_type?: string;
   subject?: string;
   description?: string;
-  interaction_date?: string;
+  interaction_date: string;
+  user_id?: string;
   follow_up_date?: string;
   follow_up_notes?: string;
-  conducted_by?: string;
   created_at: string;
+}
+
+export interface PartnerOpportunity {
+  id: string;
+  partner_id: string;
+  opportunity_type?: string;
+  title: string;
+  description?: string;
+  quota?: number;
+  deadline?: string;
+  status?: string;
+  assigned_to?: string;
+  notes?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface MediaAlbum {

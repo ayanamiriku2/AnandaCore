@@ -8,30 +8,52 @@ use crate::models::*;
 pub async fn create_asset(pool: &PgPool, req: CreateAssetRequest, user_id: Uuid) -> Result<Asset, AppError> {
     let asset = sqlx::query_as::<_, Asset>(
         r#"INSERT INTO assets (name, asset_code, category_id, location_id, department_id,
-            responsible_user_id, acquisition_date, condition, description, notes, created_by)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *"#
+            responsible_user_id, acquisition_date, acquisition_value, condition, description, notes, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *"#
     )
     .bind(&req.name).bind(&req.asset_code).bind(req.category_id)
     .bind(req.location_id).bind(req.department_id).bind(req.responsible_user_id)
-    .bind(req.acquisition_date).bind(req.condition.unwrap_or_else(|| "baik".into()))
+    .bind(req.acquisition_date).bind(req.acquisition_value)
+    .bind(req.condition.unwrap_or_else(|| "baik".into()))
     .bind(&req.description).bind(&req.notes).bind(user_id)
     .fetch_one(pool).await?;
     Ok(asset)
 }
 
 pub async fn list_assets(pool: &PgPool, pagination: &PaginationParams, filter: &AssetFilter) -> Result<PaginatedResponse<Asset>, AppError> {
-    let mut conditions = vec!["deleted_at IS NULL".to_string()];
-    if let Some(cid) = filter.category_id { conditions.push(format!("category_id = '{}'", cid)); }
-    if let Some(ref c) = filter.condition { conditions.push(format!("condition = '{}'", c)); }
-    if let Some(ref s) = filter.status { conditions.push(format!("status = '{}'", s)); }
-    let where_clause = conditions.join(" AND ");
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM assets WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL OR category_id = $1) \
+         AND ($2::uuid IS NULL OR location_id = $2) \
+         AND ($3::text IS NULL OR condition = $3) \
+         AND ($4::text IS NULL OR status = $4) \
+         AND ($5::text IS NULL OR name ILIKE '%' || $5 || '%' OR asset_code ILIKE '%' || $5 || '%' OR description ILIKE '%' || $5 || '%')"
+    )
+    .bind(filter.category_id)
+    .bind(filter.location_id)
+    .bind(&filter.condition)
+    .bind(&filter.status)
+    .bind(&filter.search)
+    .fetch_one(pool).await.unwrap_or(0);
 
-    let total: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM assets WHERE {}", where_clause))
-        .fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, Asset>(
-        &format!("SELECT * FROM assets WHERE {} ORDER BY name LIMIT {} OFFSET {}",
-            where_clause, pagination.per_page(), pagination.offset())
-    ).fetch_all(pool).await?;
+        "SELECT * FROM assets WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL OR category_id = $1) \
+         AND ($2::uuid IS NULL OR location_id = $2) \
+         AND ($3::text IS NULL OR condition = $3) \
+         AND ($4::text IS NULL OR status = $4) \
+         AND ($5::text IS NULL OR name ILIKE '%' || $5 || '%' OR asset_code ILIKE '%' || $5 || '%' OR description ILIKE '%' || $5 || '%') \
+         ORDER BY name LIMIT $6 OFFSET $7"
+    )
+    .bind(filter.category_id)
+    .bind(filter.location_id)
+    .bind(&filter.condition)
+    .bind(&filter.status)
+    .bind(&filter.search)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
+    .fetch_all(pool).await?;
+
     Ok(PaginatedResponse::new(data, total, pagination))
 }
 

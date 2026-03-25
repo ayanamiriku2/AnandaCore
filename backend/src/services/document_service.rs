@@ -43,38 +43,52 @@ pub async fn create_document(pool: &PgPool, req: CreateDocumentRequest, user_id:
 }
 
 pub async fn list_documents(pool: &PgPool, pagination: &PaginationParams, filter: &DocumentFilter) -> Result<PaginatedResponse<DocumentSummary>, AppError> {
-    let mut where_clauses = vec!["deleted_at IS NULL".to_string()];
-    let mut param_idx = 0u32;
-
-    if filter.search.is_some() {
-        param_idx += 1;
-        where_clauses.push(format!(
-            "to_tsvector('indonesian', coalesce(title, '') || ' ' || coalesce(document_number, '') || ' ' || coalesce(description, '')) @@ plainto_tsquery('indonesian', ${})",
-            param_idx
-        ));
-    }
-    if filter.category_id.is_some() { param_idx += 1; where_clauses.push(format!("category_id = ${}", param_idx)); }
-    if filter.department_id.is_some() { param_idx += 1; where_clauses.push(format!("department_id = ${}", param_idx)); }
-    if filter.status.is_some() { param_idx += 1; where_clauses.push(format!("status = ${}", param_idx)); }
-    if filter.confidentiality.is_some() { param_idx += 1; where_clauses.push(format!("confidentiality = ${}", param_idx)); }
-    if filter.year.is_some() { param_idx += 1; where_clauses.push(format!("EXTRACT(YEAR FROM document_date) = ${}", param_idx)); }
-
-    // For simplicity, we use a direct query approach
     let total: i64 = sqlx::query_scalar(
-        &format!("SELECT COUNT(*) FROM documents WHERE {}", where_clauses.join(" AND "))
+        "SELECT COUNT(*) FROM documents WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL OR category_id = $1) \
+         AND ($2::uuid IS NULL OR department_id = $2) \
+         AND ($3::uuid IS NULL OR program_id = $3) \
+         AND ($4::text IS NULL OR status = $4) \
+         AND ($5::text IS NULL OR confidentiality = $5) \
+         AND ($6::int4 IS NULL OR EXTRACT(YEAR FROM document_date)::int4 = $6) \
+         AND ($7::text IS NULL OR verification_status = $7) \
+         AND ($8::text IS NULL OR title ILIKE '%' || $8 || '%' OR document_number ILIKE '%' || $8 || '%' OR description ILIKE '%' || $8 || '%')"
     )
+    .bind(filter.category_id)
+    .bind(filter.department_id)
+    .bind(filter.program_id)
+    .bind(&filter.status)
+    .bind(&filter.confidentiality)
+    .bind(filter.year)
+    .bind(&filter.verification_status)
+    .bind(&filter.search)
     .fetch_one(pool)
     .await
     .unwrap_or(0);
 
     let data = sqlx::query_as::<_, DocumentSummary>(
-        &format!(
-            "SELECT id, title, document_number, document_date, category_id, confidentiality, status, file_name, verification_status, created_at FROM documents WHERE {} ORDER BY created_at DESC LIMIT {} OFFSET {}",
-            where_clauses[0], // simplified: just use base filter for the direct query
-            pagination.per_page(),
-            pagination.offset()
-        )
+        "SELECT id, title, document_number, document_date, category_id, confidentiality, status, file_name, verification_status, created_at \
+         FROM documents WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL OR category_id = $1) \
+         AND ($2::uuid IS NULL OR department_id = $2) \
+         AND ($3::uuid IS NULL OR program_id = $3) \
+         AND ($4::text IS NULL OR status = $4) \
+         AND ($5::text IS NULL OR confidentiality = $5) \
+         AND ($6::int4 IS NULL OR EXTRACT(YEAR FROM document_date)::int4 = $6) \
+         AND ($7::text IS NULL OR verification_status = $7) \
+         AND ($8::text IS NULL OR title ILIKE '%' || $8 || '%' OR document_number ILIKE '%' || $8 || '%' OR description ILIKE '%' || $8 || '%') \
+         ORDER BY created_at DESC LIMIT $9 OFFSET $10"
     )
+    .bind(filter.category_id)
+    .bind(filter.department_id)
+    .bind(filter.program_id)
+    .bind(&filter.status)
+    .bind(&filter.confidentiality)
+    .bind(filter.year)
+    .bind(&filter.verification_status)
+    .bind(&filter.search)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
     .fetch_all(pool)
     .await?;
 
@@ -90,27 +104,51 @@ pub async fn get_document(pool: &PgPool, id: Uuid) -> Result<Document, AppError>
 }
 
 pub async fn update_document(pool: &PgPool, id: Uuid, req: UpdateDocumentRequest) -> Result<Document, AppError> {
-    let doc = get_document(pool, id).await?;
+    let _doc = get_document(pool, id).await?;
 
     let updated = sqlx::query_as::<_, Document>(
         r#"UPDATE documents SET
             title = COALESCE($2, title),
             document_number = COALESCE($3, document_number),
-            status = COALESCE($4, status),
-            description = COALESCE($5, description),
-            internal_notes = COALESCE($6, internal_notes),
-            confidentiality = COALESCE($7, confidentiality)
-        WHERE id = $1 RETURNING *"#
+            document_date = COALESCE($4, document_date),
+            department_id = COALESCE($5, department_id),
+            program_id = COALESCE($6, program_id),
+            category_id = COALESCE($7, category_id),
+            confidentiality = COALESCE($8, confidentiality),
+            status = COALESCE($9, status),
+            retention_type = COALESCE($10, retention_type),
+            retention_until = COALESCE($11, retention_until),
+            description = COALESCE($12, description),
+            internal_notes = COALESCE($13, internal_notes),
+            responsible_user_id = COALESCE($14, responsible_user_id),
+            updated_at = NOW()
+        WHERE id = $1 AND deleted_at IS NULL RETURNING *"#
     )
     .bind(id)
     .bind(&req.title)
     .bind(&req.document_number)
+    .bind(req.document_date)
+    .bind(req.department_id)
+    .bind(req.program_id)
+    .bind(req.category_id)
+    .bind(&req.confidentiality)
     .bind(&req.status)
+    .bind(&req.retention_type)
+    .bind(req.retention_until)
     .bind(&req.description)
     .bind(&req.internal_notes)
-    .bind(&req.confidentiality)
+    .bind(req.responsible_user_id)
     .fetch_one(pool)
     .await?;
+
+    if let Some(tag_ids) = req.tag_ids {
+        sqlx::query("DELETE FROM document_tags WHERE document_id = $1")
+            .bind(id).execute(pool).await?;
+        for tag_id in tag_ids {
+            sqlx::query("INSERT INTO document_tags (document_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING")
+                .bind(id).bind(tag_id).execute(pool).await?;
+        }
+    }
 
     Ok(updated)
 }

@@ -37,6 +37,7 @@ pub struct CreateAssetRequest {
     pub department_id: Option<Uuid>,
     pub responsible_user_id: Option<Uuid>,
     pub acquisition_date: Option<NaiveDate>,
+    pub acquisition_value: Option<rust_decimal::Decimal>,
     pub condition: Option<String>,
     pub description: Option<String>,
     pub notes: Option<String>,

@@ -60,6 +60,8 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
         .route("/partners/:id/agreements", get(partner_handler::agreements).post(partner_handler::create_agreement))
         .route("/partners/:id/agreements/:agreement_id/upload", post(partner_handler::upload_agreement_file))
         .route("/partners/:id/interactions", get(partner_handler::interactions).post(partner_handler::create_interaction))
+        .route("/partners/:id/opportunities", get(partner_handler::opportunities).post(partner_handler::create_opportunity))
+        .route("/partners/:id/opportunities/:opp_id", put(partner_handler::update_opportunity))
         .route("/partners/:id/restore", post(partner_handler::restore))
 
         // Beneficiaries

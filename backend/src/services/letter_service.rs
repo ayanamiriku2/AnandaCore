@@ -39,33 +39,47 @@ pub async fn create_letter(pool: &PgPool, req: CreateLetterRequest, user_id: Uui
 }
 
 pub async fn list_letters(pool: &PgPool, pagination: &PaginationParams, filter: &LetterFilter) -> Result<PaginatedResponse<Letter>, AppError> {
-    let mut conditions = vec!["deleted_at IS NULL".to_string()];
-
-    if let Some(ref lt) = filter.letter_type {
-        conditions.push(format!("letter_type = '{}'", lt));
-    }
-    if let Some(ref st) = filter.status {
-        conditions.push(format!("status = '{}'", st));
-    }
-    if let Some(ref fu) = filter.follow_up_status {
-        conditions.push(format!("follow_up_status = '{}'", fu));
-    }
-
-    let where_clause = conditions.join(" AND ");
-
     let total: i64 = sqlx::query_scalar(
-        &format!("SELECT COUNT(*) FROM letters WHERE {}", where_clause)
+        "SELECT COUNT(*) FROM letters WHERE deleted_at IS NULL \
+         AND ($1::text IS NULL OR letter_type = $1) \
+         AND ($2::text IS NULL OR status = $2) \
+         AND ($3::text IS NULL OR follow_up_status = $3) \
+         AND ($4::uuid IS NULL OR classification_id = $4) \
+         AND ($5::int4 IS NULL OR EXTRACT(YEAR FROM letter_date)::int4 = $5) \
+         AND ($6::int4 IS NULL OR EXTRACT(MONTH FROM letter_date)::int4 = $6) \
+         AND ($7::text IS NULL OR subject ILIKE '%' || $7 || '%' OR letter_number ILIKE '%' || $7 || '%' OR sender ILIKE '%' || $7 || '%' OR recipient ILIKE '%' || $7 || '%')"
     )
+    .bind(&filter.letter_type)
+    .bind(&filter.status)
+    .bind(&filter.follow_up_status)
+    .bind(filter.classification_id)
+    .bind(filter.year)
+    .bind(filter.month)
+    .bind(&filter.search)
     .fetch_one(pool)
     .await
     .unwrap_or(0);
 
     let data = sqlx::query_as::<_, Letter>(
-        &format!(
-            "SELECT * FROM letters WHERE {} ORDER BY created_at DESC LIMIT {} OFFSET {}",
-            where_clause, pagination.per_page(), pagination.offset()
-        )
+        "SELECT * FROM letters WHERE deleted_at IS NULL \
+         AND ($1::text IS NULL OR letter_type = $1) \
+         AND ($2::text IS NULL OR status = $2) \
+         AND ($3::text IS NULL OR follow_up_status = $3) \
+         AND ($4::uuid IS NULL OR classification_id = $4) \
+         AND ($5::int4 IS NULL OR EXTRACT(YEAR FROM letter_date)::int4 = $5) \
+         AND ($6::int4 IS NULL OR EXTRACT(MONTH FROM letter_date)::int4 = $6) \
+         AND ($7::text IS NULL OR subject ILIKE '%' || $7 || '%' OR letter_number ILIKE '%' || $7 || '%' OR sender ILIKE '%' || $7 || '%' OR recipient ILIKE '%' || $7 || '%') \
+         ORDER BY created_at DESC LIMIT $8 OFFSET $9"
     )
+    .bind(&filter.letter_type)
+    .bind(&filter.status)
+    .bind(&filter.follow_up_status)
+    .bind(filter.classification_id)
+    .bind(filter.year)
+    .bind(filter.month)
+    .bind(&filter.search)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
     .fetch_all(pool)
     .await?;
 

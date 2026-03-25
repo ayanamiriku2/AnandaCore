@@ -18,19 +18,43 @@ pub async fn create_task(pool: &PgPool, req: CreateTaskRequest, user_id: Uuid) -
 }
 
 pub async fn list_tasks(pool: &PgPool, pagination: &PaginationParams, filter: &TaskFilter) -> Result<PaginatedResponse<Task>, AppError> {
-    let mut conditions = vec!["deleted_at IS NULL".to_string()];
-    if let Some(ref s) = filter.status { conditions.push(format!("status = '{}'", s)); }
-    if let Some(ref p) = filter.priority { conditions.push(format!("priority = '{}'", p)); }
-    if let Some(uid) = filter.assigned_to { conditions.push(format!("assigned_to = '{}'", uid)); }
-    if filter.overdue == Some(true) { conditions.push("due_date < NOW() AND status != 'selesai'".to_string()); }
-    let where_clause = conditions.join(" AND ");
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL \
+         AND ($1::text IS NULL OR status = $1) \
+         AND ($2::text IS NULL OR priority = $2) \
+         AND ($3::uuid IS NULL OR assigned_to = $3) \
+         AND ($4::uuid IS NULL OR department_id = $4) \
+         AND ($5::bool IS NOT TRUE OR (due_date < NOW() AND status != 'selesai')) \
+         AND ($6::text IS NULL OR title ILIKE '%' || $6 || '%' OR description ILIKE '%' || $6 || '%')"
+    )
+    .bind(&filter.status)
+    .bind(&filter.priority)
+    .bind(filter.assigned_to)
+    .bind(filter.department_id)
+    .bind(filter.overdue)
+    .bind(&filter.search)
+    .fetch_one(pool).await.unwrap_or(0);
 
-    let total: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM tasks WHERE {}", where_clause))
-        .fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, Task>(
-        &format!("SELECT * FROM tasks WHERE {} ORDER BY CASE WHEN status = 'terlambat' THEN 0 WHEN priority = 'urgent' THEN 1 ELSE 2 END, due_date ASC NULLS LAST LIMIT {} OFFSET {}",
-            where_clause, pagination.per_page(), pagination.offset())
-    ).fetch_all(pool).await?;
+        "SELECT * FROM tasks WHERE deleted_at IS NULL \
+         AND ($1::text IS NULL OR status = $1) \
+         AND ($2::text IS NULL OR priority = $2) \
+         AND ($3::uuid IS NULL OR assigned_to = $3) \
+         AND ($4::uuid IS NULL OR department_id = $4) \
+         AND ($5::bool IS NOT TRUE OR (due_date < NOW() AND status != 'selesai')) \
+         AND ($6::text IS NULL OR title ILIKE '%' || $6 || '%' OR description ILIKE '%' || $6 || '%') \
+         ORDER BY CASE WHEN status = 'terlambat' THEN 0 WHEN priority = 'urgent' THEN 1 ELSE 2 END, due_date ASC NULLS LAST LIMIT $7 OFFSET $8"
+    )
+    .bind(&filter.status)
+    .bind(&filter.priority)
+    .bind(filter.assigned_to)
+    .bind(filter.department_id)
+    .bind(filter.overdue)
+    .bind(&filter.search)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
+    .fetch_all(pool).await?;
+
     Ok(PaginatedResponse::new(data, total, pagination))
 }
 

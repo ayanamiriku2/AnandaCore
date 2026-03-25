@@ -3,18 +3,43 @@ use uuid::Uuid;
 use crate::{db::*, errors::AppError, models::*};
 
 pub async fn list_audit_logs(pool: &PgPool, pagination: &PaginationParams, filter: &AuditFilter) -> Result<PaginatedResponse<AuditLog>, AppError> {
-    let mut conditions = vec!["1=1".to_string()];
-    if let Some(uid) = filter.user_id { conditions.push(format!("user_id = '{}'", uid)); }
-    if let Some(ref m) = filter.module { conditions.push(format!("module = '{}'", m)); }
-    if let Some(ref a) = filter.action { conditions.push(format!("action = '{}'", a)); }
-    let where_clause = conditions.join(" AND ");
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM audit_logs WHERE 1=1 \
+         AND ($1::uuid IS NULL OR user_id = $1) \
+         AND ($2::text IS NULL OR module = $2) \
+         AND ($3::text IS NULL OR action = $3) \
+         AND ($4::text IS NULL OR entity_type = $4) \
+         AND ($5::timestamptz IS NULL OR created_at >= $5) \
+         AND ($6::timestamptz IS NULL OR created_at <= $6)"
+    )
+    .bind(filter.user_id)
+    .bind(&filter.module)
+    .bind(&filter.action)
+    .bind(&filter.entity_type)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .fetch_one(pool).await.unwrap_or(0);
 
-    let total: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM audit_logs WHERE {}", where_clause))
-        .fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, AuditLog>(
-        &format!("SELECT * FROM audit_logs WHERE {} ORDER BY created_at DESC LIMIT {} OFFSET {}",
-            where_clause, pagination.per_page(), pagination.offset())
-    ).fetch_all(pool).await?;
+        "SELECT * FROM audit_logs WHERE 1=1 \
+         AND ($1::uuid IS NULL OR user_id = $1) \
+         AND ($2::text IS NULL OR module = $2) \
+         AND ($3::text IS NULL OR action = $3) \
+         AND ($4::text IS NULL OR entity_type = $4) \
+         AND ($5::timestamptz IS NULL OR created_at >= $5) \
+         AND ($6::timestamptz IS NULL OR created_at <= $6) \
+         ORDER BY created_at DESC LIMIT $7 OFFSET $8"
+    )
+    .bind(filter.user_id)
+    .bind(&filter.module)
+    .bind(&filter.action)
+    .bind(&filter.entity_type)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
+    .fetch_all(pool).await?;
+
     Ok(PaginatedResponse::new(data, total, pagination))
 }
 

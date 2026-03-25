@@ -21,17 +21,39 @@ pub async fn create_beneficiary(pool: &PgPool, req: CreateBeneficiaryRequest, us
 }
 
 pub async fn list_beneficiaries(pool: &PgPool, pagination: &PaginationParams, filter: &BeneficiaryFilter) -> Result<PaginatedResponse<Beneficiary>, AppError> {
-    let mut conditions = vec!["deleted_at IS NULL".to_string()];
-    if let Some(sid) = filter.status_id { conditions.push(format!("status_id = '{}'", sid)); }
-    if let Some(ref c) = filter.city { conditions.push(format!("city = '{}'", c)); }
-    let where_clause = conditions.join(" AND ");
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM beneficiaries WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL OR status_id = $1) \
+         AND ($2::text IS NULL OR city = $2) \
+         AND ($3::text IS NULL OR education_level = $3) \
+         AND ($4::text IS NULL OR placement_status = $4) \
+         AND ($5::text IS NULL OR full_name ILIKE '%' || $5 || '%' OR nik ILIKE '%' || $5 || '%' OR address ILIKE '%' || $5 || '%')"
+    )
+    .bind(filter.status_id)
+    .bind(&filter.city)
+    .bind(&filter.education_level)
+    .bind(&filter.placement_status)
+    .bind(&filter.search)
+    .fetch_one(pool).await.unwrap_or(0);
 
-    let total: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM beneficiaries WHERE {}", where_clause))
-        .fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, Beneficiary>(
-        &format!("SELECT * FROM beneficiaries WHERE {} ORDER BY created_at DESC LIMIT {} OFFSET {}",
-            where_clause, pagination.per_page(), pagination.offset())
-    ).fetch_all(pool).await?;
+        "SELECT * FROM beneficiaries WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL OR status_id = $1) \
+         AND ($2::text IS NULL OR city = $2) \
+         AND ($3::text IS NULL OR education_level = $3) \
+         AND ($4::text IS NULL OR placement_status = $4) \
+         AND ($5::text IS NULL OR full_name ILIKE '%' || $5 || '%' OR nik ILIKE '%' || $5 || '%' OR address ILIKE '%' || $5 || '%') \
+         ORDER BY created_at DESC LIMIT $6 OFFSET $7"
+    )
+    .bind(filter.status_id)
+    .bind(&filter.city)
+    .bind(&filter.education_level)
+    .bind(&filter.placement_status)
+    .bind(&filter.search)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
+    .fetch_all(pool).await?;
+
     Ok(PaginatedResponse::new(data, total, pagination))
 }
 
@@ -45,11 +67,13 @@ pub async fn update_beneficiary(pool: &PgPool, id: Uuid, req: UpdateBeneficiaryR
     sqlx::query_as::<_, Beneficiary>(
         r#"UPDATE beneficiaries SET full_name = COALESCE($2, full_name), phone = COALESCE($3, phone),
             address = COALESCE($4, address), status_id = COALESCE($5, status_id),
-            placement_status = COALESCE($6, placement_status), internal_notes = COALESCE($7, internal_notes)
-        WHERE id = $1 RETURNING *"#
+            placement_status = COALESCE($6, placement_status), placement_partner_id = COALESCE($7, placement_partner_id),
+            internal_notes = COALESCE($8, internal_notes)
+        WHERE id = $1 AND deleted_at IS NULL RETURNING *"#
     )
     .bind(id).bind(&req.full_name).bind(&req.phone).bind(&req.address)
-    .bind(req.status_id).bind(&req.placement_status).bind(&req.internal_notes)
+    .bind(req.status_id).bind(&req.placement_status).bind(req.placement_partner_id)
+    .bind(&req.internal_notes)
     .fetch_one(pool).await.map_err(AppError::from)
 }
 

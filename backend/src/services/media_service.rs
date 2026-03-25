@@ -33,17 +33,43 @@ pub async fn get_album_assets(pool: &PgPool, album_id: Uuid) -> Result<Vec<Media
 }
 
 pub async fn list_assets(pool: &PgPool, pagination: &PaginationParams, filter: &MediaFilter) -> Result<PaginatedResponse<MediaAsset>, AppError> {
-    let mut conditions = vec!["deleted_at IS NULL".to_string()];
-    if let Some(ref mt) = filter.media_type { conditions.push(format!("media_type = '{}'", mt)); }
-    if let Some(aid) = filter.album_id { conditions.push(format!("album_id = '{}'", aid)); }
-    let where_clause = conditions.join(" AND ");
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM media_assets WHERE deleted_at IS NULL \
+         AND ($1::text IS NULL OR media_type = $1) \
+         AND ($2::uuid IS NULL OR album_id = $2) \
+         AND ($3::uuid IS NULL OR activity_id = $3) \
+         AND ($4::date IS NULL OR created_at::date >= $4) \
+         AND ($5::date IS NULL OR created_at::date <= $5) \
+         AND ($6::text IS NULL OR title ILIKE '%' || $6 || '%' OR description ILIKE '%' || $6 || '%')"
+    )
+    .bind(&filter.media_type)
+    .bind(filter.album_id)
+    .bind(filter.activity_id)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(&filter.search)
+    .fetch_one(pool).await.unwrap_or(0);
 
-    let total: i64 = sqlx::query_scalar(&format!("SELECT COUNT(*) FROM media_assets WHERE {}", where_clause))
-        .fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, MediaAsset>(
-        &format!("SELECT * FROM media_assets WHERE {} ORDER BY created_at DESC LIMIT {} OFFSET {}",
-            where_clause, pagination.per_page(), pagination.offset())
-    ).fetch_all(pool).await?;
+        "SELECT * FROM media_assets WHERE deleted_at IS NULL \
+         AND ($1::text IS NULL OR media_type = $1) \
+         AND ($2::uuid IS NULL OR album_id = $2) \
+         AND ($3::uuid IS NULL OR activity_id = $3) \
+         AND ($4::date IS NULL OR created_at::date >= $4) \
+         AND ($5::date IS NULL OR created_at::date <= $5) \
+         AND ($6::text IS NULL OR title ILIKE '%' || $6 || '%' OR description ILIKE '%' || $6 || '%') \
+         ORDER BY created_at DESC LIMIT $7 OFFSET $8"
+    )
+    .bind(&filter.media_type)
+    .bind(filter.album_id)
+    .bind(filter.activity_id)
+    .bind(filter.date_from)
+    .bind(filter.date_to)
+    .bind(&filter.search)
+    .bind(pagination.per_page())
+    .bind(pagination.offset())
+    .fetch_all(pool).await?;
+
     Ok(PaginatedResponse::new(data, total, pagination))
 }
 
