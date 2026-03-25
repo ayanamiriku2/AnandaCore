@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 import type { Partner, PaginatedResponse } from "@/types";
 
 export default function PartnersPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
   const pagination = usePagination();
   const [search, setSearch] = useState("");
@@ -115,6 +117,7 @@ export default function PartnersPage() {
         totalPages={data?.total_pages}
         total={data?.total}
         onPageChange={pagination.setPage}
+        onRowClick={(item: Partner) => router.push(`/partners/${item.id}`)}
         emptyMessage="Belum ada mitra"
       />
 

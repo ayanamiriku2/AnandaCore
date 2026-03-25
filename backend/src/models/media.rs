@@ -55,6 +55,12 @@ pub struct CreateAlbumRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct UpdateAlbumRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct MediaFilter {
     pub search: Option<String>,
     pub media_type: Option<String>,

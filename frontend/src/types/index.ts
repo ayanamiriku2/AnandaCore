@@ -85,17 +85,50 @@ export interface Document {
   category_id?: string;
   category_name?: string;
   file_path?: string;
+  file_name?: string;
   file_size?: number;
+  file_mime?: string;
   mime_type?: string;
   status: string;
   version: number;
+  current_version?: number;
+  verification_status?: string;
+  verified_by?: string;
+  verified_at?: string;
+  confidentiality?: string;
+  retention_type?: string;
+  department_id?: string;
+  program_id?: string;
   tags: string[];
   created_by: string;
   creator_name?: string;
-  verified_by?: string;
-  verified_at?: string;
+  uploaded_by?: string;
+  responsible_user_id?: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  document_id: string;
+  version_number: number;
+  file_path: string;
+  file_name?: string;
+  file_size?: number;
+  file_mime?: string;
+  change_notes?: string;
+  uploaded_by?: string;
+  created_at: string;
+}
+
+export interface DocumentCategory {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  parent_id?: string;
+  is_active: boolean;
 }
 
 export interface Letter {
@@ -116,9 +149,38 @@ export interface Letter {
   status: string;
   follow_up_status?: string;
   follow_up_deadline?: string;
+  follow_up_notes?: string;
   responsible_user_id?: string;
   department_id?: string;
   created_by?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string;
+}
+
+export interface LetterAttachment {
+  id: string;
+  letter_id: string;
+  title?: string;
+  file_path: string;
+  file_name?: string;
+  file_size?: number;
+  file_mime?: string;
+  uploaded_by?: string;
+  created_at: string;
+}
+
+export interface LetterDisposition {
+  id: string;
+  letter_id: string;
+  from_user_id?: string;
+  to_user_id: string;
+  instruction?: string;
+  priority?: string;
+  status?: string;
+  read_at?: string;
+  completed_at?: string;
+  notes?: string;
   created_at: string;
   updated_at: string;
 }
@@ -176,9 +238,84 @@ export interface Partner {
   description?: string;
   pipeline_status: string;
   relationship_status?: string;
+  internal_notes?: string;
   logo_path?: string;
   created_at: string;
   updated_at: string;
+  deleted_at?: string;
+}
+
+export interface PartnerContact {
+  id: string;
+  partner_id: string;
+  name: string;
+  position?: string;
+  email?: string;
+  phone?: string;
+  is_primary?: boolean;
+  notes?: string;
+  created_at: string;
+}
+
+export interface PartnershipAgreement {
+  id: string;
+  partner_id: string;
+  agreement_number?: string;
+  title: string;
+  cooperation_type_id?: string;
+  description?: string;
+  start_date?: string;
+  end_date?: string;
+  status?: string;
+  file_path?: string;
+  file_name?: string;
+  reminder_date?: string;
+  notes?: string;
+  created_at: string;
+}
+
+export interface PartnerInteraction {
+  id: string;
+  partner_id: string;
+  interaction_type?: string;
+  subject?: string;
+  description?: string;
+  interaction_date?: string;
+  follow_up_date?: string;
+  follow_up_notes?: string;
+  conducted_by?: string;
+  created_at: string;
+}
+
+export interface MediaAlbum {
+  id: string;
+  title: string;
+  description?: string;
+  activity_id?: string;
+  program_id?: string;
+  album_date?: string;
+  cover_image_path?: string;
+  is_featured?: boolean;
+  status?: string;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MediaAsset {
+  id: string;
+  album_id?: string;
+  activity_id?: string;
+  title?: string;
+  description?: string;
+  media_type: string;
+  file_path: string;
+  file_name?: string;
+  file_size?: number;
+  file_mime?: string;
+  thumbnail_path?: string;
+  uploaded_by?: string;
+  created_at: string;
 }
 
 export interface Beneficiary {

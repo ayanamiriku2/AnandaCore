@@ -28,15 +28,21 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Documents
         .route("/documents", get(document_handler::list).post(document_handler::create))
-        .route("/documents/{id}", get(document_handler::get).put(document_handler::update))
+        .route("/documents/{id}", get(document_handler::get).put(document_handler::update).delete(document_handler::soft_delete))
+        .route("/documents/{id}/upload", post(document_handler::upload_file))
+        .route("/documents/{id}/download", get(document_handler::download_file))
         .route("/documents/{id}/verify", post(document_handler::verify))
         .route("/documents/{id}/versions", get(document_handler::versions))
+        .route("/documents/{id}/restore", post(document_handler::restore))
         .route("/documents/categories", get(document_handler::categories))
 
         // Letters
         .route("/letters", get(letter_handler::list).post(letter_handler::create))
-        .route("/letters/{id}", get(letter_handler::get).put(letter_handler::update))
+        .route("/letters/{id}", get(letter_handler::get).put(letter_handler::update).delete(letter_handler::soft_delete))
         .route("/letters/{id}/dispositions", get(letter_handler::get_dispositions).post(letter_handler::create_disposition))
+        .route("/letters/{id}/attachments", get(letter_handler::get_attachments).post(letter_handler::upload_attachment))
+        .route("/letters/{id}/restore", post(letter_handler::restore))
+        .route("/letters/attachments/{attachment_id}/download", get(letter_handler::download_attachment))
 
         // Programs
         .route("/programs", get(program_handler::list).post(program_handler::create))
@@ -48,9 +54,12 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Partners
         .route("/partners", get(partner_handler::list).post(partner_handler::create))
-        .route("/partners/{id}", get(partner_handler::get).put(partner_handler::update))
-        .route("/partners/{id}/contacts", get(partner_handler::contacts))
-        .route("/partners/{id}/agreements", get(partner_handler::agreements))
+        .route("/partners/{id}", get(partner_handler::get).put(partner_handler::update).delete(partner_handler::soft_delete))
+        .route("/partners/{id}/contacts", get(partner_handler::contacts).post(partner_handler::create_contact))
+        .route("/partners/{id}/agreements", get(partner_handler::agreements).post(partner_handler::create_agreement))
+        .route("/partners/{id}/agreements/{agreement_id}/upload", post(partner_handler::upload_agreement_file))
+        .route("/partners/{id}/interactions", get(partner_handler::interactions).post(partner_handler::create_interaction))
+        .route("/partners/{id}/restore", post(partner_handler::restore))
 
         // Beneficiaries
         .route("/beneficiaries", get(beneficiary_handler::list).post(beneficiary_handler::create))
@@ -67,8 +76,11 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Media
         .route("/media/albums", get(media_handler::list_albums).post(media_handler::create_album))
-        .route("/media/albums/{id}", get(media_handler::get_album))
+        .route("/media/albums/{id}", get(media_handler::get_album).put(media_handler::update_album).delete(media_handler::soft_delete_album))
+        .route("/media/albums/{id}/upload", post(media_handler::upload_asset))
+        .route("/media/albums/{id}/restore", post(media_handler::restore_album))
         .route("/media/assets", get(media_handler::list_assets))
+        .route("/media/assets/{id}", delete(media_handler::delete_asset))
 
         // Memos & Announcements
         .route("/memos", get(memo_handler::list_memos).post(memo_handler::create_memo))

@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,20 +11,21 @@ import { Select } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePagination } from "@/hooks/use-pagination";
 import { formatDate, statusColor } from "@/lib/utils";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import type { Document, PaginatedResponse } from "@/types";
 
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const pagination = usePagination();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
-  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Document | null>(null);
   const [form, setForm] = useState({
     title: "",
     document_number: "",
@@ -56,24 +58,34 @@ export default function DocumentsPage() {
     onError: () => toast.error("Gagal membuat dokumen"),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) =>
-      api.put(`/documents/${id}`, data),
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/documents/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["documents"] });
-      setShowEdit(false);
-      setEditingDoc(null);
-      toast.success("Dokumen berhasil diperbarui");
+      setDeleteTarget(null);
+      toast.success("Dokumen berhasil dihapus");
     },
-    onError: () => toast.error("Gagal memperbarui dokumen"),
+    onError: () => toast.error("Gagal menghapus dokumen"),
   });
 
   const columns = [
-    { key: "document_number", header: "No. Dokumen" },
-    { key: "title", header: "Judul", render: (item: Document) => (
-      <span className="font-medium">{item.title}</span>
-    )},
-    { key: "category_name", header: "Kategori" },
+    {
+      key: "title",
+      header: "Dokumen",
+      render: (item: Document) => (
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50">
+            <FileText className="h-4.5 w-4.5 text-blue-500" />
+          </div>
+          <div>
+            <p className="font-medium">{item.title}</p>
+            {item.document_number && (
+              <p className="text-xs text-gray-500 font-mono">{item.document_number}</p>
+            )}
+          </div>
+        </div>
+      ),
+    },
     {
       key: "status",
       header: "Status",
@@ -83,8 +95,26 @@ export default function DocumentsPage() {
         </span>
       ),
     },
-    { key: "version", header: "Versi", render: (item: Document) => `v${item.version}` },
-    { key: "creator_name", header: "Dibuat Oleh" },
+    {
+      key: "file_name",
+      header: "File",
+      render: (item: Document) =>
+        item.file_name ? (
+          <span className="text-xs text-gray-600">{item.file_name}</span>
+        ) : (
+          <span className="text-xs text-gray-400">Belum ada file</span>
+        ),
+    },
+    {
+      key: "verification_status",
+      header: "Verifikasi",
+      render: (item: Document) =>
+        item.verification_status === "terverifikasi" ? (
+          <Badge variant="success">Terverifikasi</Badge>
+        ) : (
+          <Badge variant="default">Belum</Badge>
+        ),
+    },
     {
       key: "created_at",
       header: "Tanggal",
@@ -92,21 +122,18 @@ export default function DocumentsPage() {
     },
     {
       key: "actions",
-      header: "Aksi",
+      header: "",
       render: (item: Document) => (
-        <div className="flex items-center gap-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingDoc(item);
-              setShowEdit(true);
-            }}
-            className="rounded p-1.5 hover:bg-gray-100"
-            title="Edit"
-          >
-            <Pencil className="h-4 w-4 text-gray-500" />
-          </button>
-        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setDeleteTarget(item);
+          }}
+          className="rounded p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500"
+          title="Hapus"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       ),
     },
   ];
@@ -144,7 +171,6 @@ export default function DocumentsPage() {
           <option value="draft">Draft</option>
           <option value="active">Aktif</option>
           <option value="archived">Diarsipkan</option>
-          <option value="verified">Terverifikasi</option>
         </Select>
       </div>
 
@@ -156,6 +182,7 @@ export default function DocumentsPage() {
         totalPages={data?.total_pages}
         total={data?.total}
         onPageChange={pagination.setPage}
+        onRowClick={(item) => router.push(`/documents/${item.id}`)}
         emptyMessage="Belum ada dokumen"
       />
 
@@ -173,15 +200,10 @@ export default function DocumentsPage() {
           className="space-y-4"
         >
           <div>
-            <label className="mb-1.5 block text-sm font-medium">
-              Nomor Dokumen
-            </label>
+            <label className="mb-1.5 block text-sm font-medium">Nomor Dokumen</label>
             <Input
               value={form.document_number}
-              onChange={(e) =>
-                setForm({ ...form, document_number: e.target.value })
-              }
-              required
+              onChange={(e) => setForm({ ...form, document_number: e.target.value })}
             />
           </div>
           <div>
@@ -193,22 +215,14 @@ export default function DocumentsPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium">
-              Deskripsi
-            </label>
+            <label className="mb-1.5 block text-sm font-medium">Deskripsi</label>
             <Textarea
               value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </div>
           <div className="flex justify-end gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setShowCreate(false)}
-            >
+            <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
               Batal
             </Button>
             <Button type="submit" disabled={createMutation.isPending}>
@@ -218,60 +232,16 @@ export default function DocumentsPage() {
         </form>
       </Modal>
 
-      <Modal
-        open={showEdit}
-        onClose={() => { setShowEdit(false); setEditingDoc(null); }}
-        title="Edit Dokumen"
-        size="lg"
-      >
-        {editingDoc && (
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.currentTarget);
-              updateMutation.mutate({
-                id: editingDoc.id,
-                data: {
-                  title: formData.get("title") as string,
-                  document_number: formData.get("document_number") as string,
-                  description: formData.get("description") as string,
-                  status: formData.get("status") as string,
-                },
-              });
-            }}
-            className="space-y-4"
-          >
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Nomor Dokumen</label>
-              <Input name="document_number" defaultValue={editingDoc.document_number} />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Judul</label>
-              <Input name="title" defaultValue={editingDoc.title} required />
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Status</label>
-              <Select name="status" defaultValue={editingDoc.status}>
-                <option value="draft">Draft</option>
-                <option value="active">Aktif</option>
-                <option value="archived">Diarsipkan</option>
-              </Select>
-            </div>
-            <div>
-              <label className="mb-1.5 block text-sm font-medium">Deskripsi</label>
-              <Textarea name="description" defaultValue={editingDoc.description || ""} />
-            </div>
-            <div className="flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => { setShowEdit(false); setEditingDoc(null); }}>
-                Batal
-              </Button>
-              <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? "Menyimpan..." : "Simpan"}
-              </Button>
-            </div>
-          </form>
-        )}
-      </Modal>
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        title="Hapus Dokumen"
+        message={`Dokumen "${deleteTarget?.title}" akan dipindahkan ke sampah. Anda dapat memulihkannya nanti.`}
+        confirmLabel="Hapus"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

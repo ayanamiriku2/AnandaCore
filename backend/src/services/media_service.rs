@@ -46,3 +46,91 @@ pub async fn list_assets(pool: &PgPool, pagination: &PaginationParams, filter: &
     ).fetch_all(pool).await?;
     Ok(PaginatedResponse::new(data, total, pagination))
 }
+
+pub async fn create_asset(
+    pool: &PgPool,
+    album_id: Uuid,
+    title: Option<String>,
+    description: Option<String>,
+    media_type: &str,
+    file_path: &str,
+    file_name: Option<String>,
+    file_size: i64,
+    file_mime: Option<String>,
+    uploaded_by: Uuid,
+) -> Result<MediaAsset, AppError> {
+    let asset = sqlx::query_as::<_, MediaAsset>(
+        "INSERT INTO media_assets (album_id, title, description, media_type, file_path, file_name, file_size, file_mime, uploaded_by, upload_status) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'completed') RETURNING *"
+    )
+    .bind(album_id)
+    .bind(&title)
+    .bind(&description)
+    .bind(media_type)
+    .bind(file_path)
+    .bind(&file_name)
+    .bind(file_size)
+    .bind(&file_mime)
+    .bind(uploaded_by)
+    .fetch_one(pool)
+    .await?;
+    Ok(asset)
+}
+
+pub async fn get_asset(pool: &PgPool, id: Uuid) -> Result<MediaAsset, AppError> {
+    sqlx::query_as::<_, MediaAsset>("SELECT * FROM media_assets WHERE id = $1 AND deleted_at IS NULL")
+        .bind(id)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| AppError::NotFound("Aset media tidak ditemukan".into()))
+}
+
+pub async fn soft_delete_asset(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    let result = sqlx::query("UPDATE media_assets SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("Aset media tidak ditemukan".into()));
+    }
+    Ok(())
+}
+
+pub async fn update_album(pool: &PgPool, id: Uuid, req: UpdateAlbumRequest) -> Result<MediaAlbum, AppError> {
+    let album = sqlx::query_as::<_, MediaAlbum>(
+        "UPDATE media_albums SET \
+         title = COALESCE($2, title), \
+         description = COALESCE($3, description), \
+         updated_at = NOW() \
+         WHERE id = $1 AND deleted_at IS NULL RETURNING *"
+    )
+    .bind(id)
+    .bind(&req.title)
+    .bind(&req.description)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Album tidak ditemukan".into()))?;
+    Ok(album)
+}
+
+pub async fn soft_delete_album(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    let result = sqlx::query("UPDATE media_albums SET deleted_at = NOW() WHERE id = $1 AND deleted_at IS NULL")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    if result.rows_affected() == 0 {
+        return Err(AppError::NotFound("Album tidak ditemukan".into()));
+    }
+    Ok(())
+}
+
+pub async fn restore_album(pool: &PgPool, id: Uuid) -> Result<MediaAlbum, AppError> {
+    let album = sqlx::query_as::<_, MediaAlbum>(
+        "UPDATE media_albums SET deleted_at = NULL, updated_at = NOW() WHERE id = $1 AND deleted_at IS NOT NULL RETURNING *"
+    )
+    .bind(id)
+    .fetch_optional(pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound("Album tidak ditemukan atau belum dihapus".into()))?;
+    Ok(album)
+}

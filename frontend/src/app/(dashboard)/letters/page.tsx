@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ export default function LettersPage() {
 function LettersContent() {
   const queryClient = useQueryClient();
   const pagination = usePagination();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const urlType = searchParams.get("type");
   const [search, setSearch] = useState("");
@@ -166,6 +167,7 @@ function LettersContent() {
         totalPages={data?.total_pages}
         total={data?.total}
         onPageChange={pagination.setPage}
+        onRowClick={(item) => router.push(`/letters/${item.id}`)}
         emptyMessage="Belum ada surat"
       />
 
