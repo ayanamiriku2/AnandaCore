@@ -23,9 +23,7 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn from_env() -> Result<Self> {
-        // Use Railway's PORT if APP_PORT is not set
         let port = std::env::var("APP_PORT")
-            .or_else(|_| std::env::var("PORT"))
             .unwrap_or_else(|_| "8080".into())
             .parse()?;
 
