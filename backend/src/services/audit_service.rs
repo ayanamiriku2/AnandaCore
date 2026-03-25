@@ -21,14 +21,16 @@ pub async fn list_audit_logs(pool: &PgPool, pagination: &PaginationParams, filte
     .fetch_one(pool).await.unwrap_or(0);
 
     let data = sqlx::query_as::<_, AuditLog>(
-        "SELECT * FROM audit_logs WHERE 1=1 \
-         AND ($1::uuid IS NULL OR user_id = $1) \
-         AND ($2::text IS NULL OR module = $2) \
-         AND ($3::text IS NULL OR action = $3) \
-         AND ($4::text IS NULL OR entity_type = $4) \
-         AND ($5::timestamptz IS NULL OR created_at >= $5) \
-         AND ($6::timestamptz IS NULL OR created_at <= $6) \
-         ORDER BY created_at DESC LIMIT $7 OFFSET $8"
+        "SELECT a.*, u.full_name as user_name FROM audit_logs a \
+         LEFT JOIN users u ON a.user_id = u.id \
+         WHERE 1=1 \
+         AND ($1::uuid IS NULL OR a.user_id = $1) \
+         AND ($2::text IS NULL OR a.module = $2) \
+         AND ($3::text IS NULL OR a.action = $3) \
+         AND ($4::text IS NULL OR a.entity_type = $4) \
+         AND ($5::timestamptz IS NULL OR a.created_at >= $5) \
+         AND ($6::timestamptz IS NULL OR a.created_at <= $6) \
+         ORDER BY a.created_at DESC LIMIT $7 OFFSET $8"
     )
     .bind(filter.user_id)
     .bind(&filter.module)

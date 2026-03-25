@@ -1,12 +1,13 @@
 use axum::{extract::State, Json};
 use std::sync::Arc;
 
-use crate::{errors::AppError, models::*, services::auth_service, AppState};
+use crate::{errors::AppError, models::*, services::{auth_service, audit_service}, AppState};
 
 pub async fn login(
     State(state): State<Arc<AppState>>,
     Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
+    let email = req.email.clone();
     let resp = auth_service::login(
         &state.db,
         req,
@@ -15,6 +16,18 @@ pub async fn login(
         state.config.refresh_token_expiry_days,
     )
     .await?;
+    // Log successful login
+    let _ = audit_service::create_audit_log(
+        &state.db,
+        Some(resp.user.id),
+        "login",
+        "auth",
+        Some("user"),
+        Some(resp.user.id),
+        None,
+        Some(serde_json::json!({"email": email})),
+        None,
+    ).await;
     Ok(Json(resp))
 }
 

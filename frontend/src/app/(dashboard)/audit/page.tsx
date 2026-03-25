@@ -19,7 +19,7 @@ export default function AuditPage() {
     queryKey: ["audit-logs", pagination.page, pagination.per_page, search],
     queryFn: () =>
       api
-        .get("/audit/logs", {
+        .get("/audit-logs", {
           params: {
             page: pagination.page,
             per_page: pagination.per_page,

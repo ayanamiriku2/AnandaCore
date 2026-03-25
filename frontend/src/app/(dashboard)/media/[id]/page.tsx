@@ -142,7 +142,7 @@ export default function MediaAlbumDetailPage() {
   });
 
   const copyAlbumLink = () => {
-    const url = `${window.location.origin}/media/${id}`;
+    const url = `${window.location.origin}/share/media/${id}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopiedAlbum(true);
       toast.success("Link album disalin ke clipboard");

@@ -13,7 +13,7 @@ use crate::{
     errors::AppError,
     middleware::auth_middleware::CurrentUser,
     models::*,
-    services::document_service,
+    services::{document_service, audit_service},
     storage::StorageService,
     AppState,
 };
@@ -41,6 +41,11 @@ pub async fn create(
     Json(req): Json<CreateDocumentRequest>,
 ) -> Result<Json<Document>, AppError> {
     let doc = document_service::create_document(&state.db, req, current.id).await?;
+    let _ = audit_service::create_audit_log(
+        &state.db, Some(current.id), "create", "documents",
+        Some("document"), Some(doc.id), None,
+        Some(serde_json::json!({"title": doc.title})), None,
+    ).await;
     Ok(Json(doc))
 }
 

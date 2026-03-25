@@ -2,15 +2,19 @@ use sqlx::PgPool;
 use crate::errors::AppError;
 
 pub async fn get_overview(pool: &PgPool) -> Result<serde_json::Value, AppError> {
-    let programs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM programs WHERE status = 'aktif' AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let documents: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM documents WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let total_programs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM programs WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let active_programs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM programs WHERE status = 'aktif' AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let total_documents: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM documents WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let total_letters: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM letters WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
     let letters_in: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM letters WHERE letter_type = 'masuk' AND deleted_at IS NULL AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW())").fetch_one(pool).await.unwrap_or(0);
     let letters_out: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM letters WHERE letter_type = 'keluar' AND deleted_at IS NULL AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW())").fetch_one(pool).await.unwrap_or(0);
-    let activities: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM activities WHERE status IN ('berjalan','disetujui') AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let partners: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM partners WHERE pipeline_status = 'aktif' AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let beneficiaries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM beneficiaries WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let total_activities: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM activities WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let total_partners: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM partners WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let total_beneficiaries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM beneficiaries WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let total_tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
     let pending_tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE status != 'selesai' AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
     let overdue_tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE due_date < NOW() AND status != 'selesai' AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    let total_assets: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM assets WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
 
     let expiring_mou: i64 = sqlx::query_scalar(
         "SELECT COUNT(*) FROM partnership_agreements WHERE end_date BETWEEN NOW() AND NOW() + INTERVAL '90 days' AND status = 'aktif' AND deleted_at IS NULL"
@@ -20,18 +24,52 @@ pub async fn get_overview(pool: &PgPool) -> Result<serde_json::Value, AppError> 
         "SELECT COUNT(*) FROM documents WHERE retention_until BETWEEN NOW() AND NOW() + INTERVAL '90 days' AND deleted_at IS NULL"
     ).fetch_one(pool).await.unwrap_or(0);
 
+    // Recent activities (last 5)
+    let recent_activities: Vec<(uuid::Uuid, String, Option<String>, Option<chrono::NaiveDate>, Option<String>)> = sqlx::query_as(
+        "SELECT a.id, a.name, p.name as program_name, a.activity_date, a.status \
+         FROM activities a LEFT JOIN programs p ON a.program_id = p.id \
+         WHERE a.deleted_at IS NULL ORDER BY a.created_at DESC LIMIT 5"
+    ).fetch_all(pool).await.unwrap_or_default();
+
+    // Recent documents (last 5)
+    let recent_documents: Vec<(uuid::Uuid, String, Option<String>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+        "SELECT id, title, document_number, created_at FROM documents \
+         WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 5"
+    ).fetch_all(pool).await.unwrap_or_default();
+
     Ok(serde_json::json!({
-        "program_aktif": programs,
-        "total_dokumen": documents,
+        "total_programs": total_programs,
+        "active_programs": active_programs,
+        "total_documents": total_documents,
+        "total_letters": total_letters,
         "surat_masuk_bulan_ini": letters_in,
         "surat_keluar_bulan_ini": letters_out,
-        "kegiatan_berjalan": activities,
-        "mitra_aktif": partners,
-        "total_peserta": beneficiaries,
-        "tugas_belum_selesai": pending_tasks,
+        "total_activities": total_activities,
+        "total_partners": total_partners,
+        "total_beneficiaries": total_beneficiaries,
+        "total_tasks": total_tasks,
+        "pending_tasks": pending_tasks,
+        "total_assets": total_assets,
         "tugas_terlambat": overdue_tasks,
         "mou_hampir_habis": expiring_mou,
         "dokumen_hampir_kedaluwarsa": expiring_docs,
+        "recent_activities": recent_activities.iter().map(|(id, name, program_name, start_date, status)| {
+            serde_json::json!({
+                "id": id,
+                "name": name,
+                "program_name": program_name,
+                "start_date": start_date,
+                "status": status,
+            })
+        }).collect::<Vec<_>>(),
+        "recent_documents": recent_documents.iter().map(|(id, title, doc_number, created_at)| {
+            serde_json::json!({
+                "id": id,
+                "title": title,
+                "document_number": doc_number,
+                "created_at": created_at,
+            })
+        }).collect::<Vec<_>>(),
     }))
 }
 

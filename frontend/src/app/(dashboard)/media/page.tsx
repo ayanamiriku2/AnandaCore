@@ -38,7 +38,7 @@ export default function MediaPage() {
 
   const copyAlbumLink = (e: React.MouseEvent, albumId: string) => {
     e.stopPropagation();
-    const url = `${window.location.origin}/media/${albumId}`;
+    const url = `${window.location.origin}/share/media/${albumId}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopiedId(albumId);
       toast.success("Link album disalin ke clipboard");
