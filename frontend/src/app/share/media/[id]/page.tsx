@@ -16,7 +16,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Archive,
-  Eye,
 } from "lucide-react";
 import type { MediaAlbum, MediaAsset } from "@/types";
 
@@ -84,6 +83,9 @@ export default function PublicAlbumPage() {
         const res = await api.get(`/media/albums/${id}/public`);
         setAlbum(res.data.album);
         setAssets(res.data.assets || []);
+        if (res.data.album?.title) {
+          document.title = `${res.data.album.title} - AnandaCore`;
+        }
       } catch {
         setError("Album tidak ditemukan atau tidak dapat diakses.");
       } finally {
@@ -91,6 +93,7 @@ export default function PublicAlbumPage() {
       }
     }
     loadAlbum();
+    return () => { document.title = "AnandaCore - Sistem Manajemen Yayasan"; };
   }, [id]);
 
   // Previewable assets for slider navigation
@@ -246,28 +249,24 @@ export default function PublicAlbumPage() {
                     </span>
                   </div>
                 )}
-                <div className="p-2">
-                  <p className="truncate text-xs font-medium">
-                    {asset.title || asset.file_name || "Untitled"}
-                  </p>
-                  {asset.file_size && (
-                    <p className="text-xs text-gray-400">{formatFileSize(asset.file_size)}</p>
-                  )}
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                  {isPreviewable(asset) && (
-                    <span className="rounded-full bg-white p-2.5 shadow">
-                      <Eye className="h-5 w-5 text-gray-700" />
-                    </span>
-                  )}
+                <div className="flex items-center justify-between gap-1 p-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-xs font-medium">
+                      {asset.title || asset.file_name || "Untitled"}
+                    </p>
+                    {asset.file_size && (
+                      <p className="text-xs text-gray-400">{formatFileSize(asset.file_size)}</p>
+                    )}
+                  </div>
                   {asset.file_path && (
                     <a
                       href={`/api/files/${asset.file_path}`}
-                      className="rounded-full bg-white p-2.5 shadow hover:bg-gray-100"
+                      className="flex-shrink-0 rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
                       download
                       onClick={(e) => e.stopPropagation()}
+                      aria-label="Unduh"
                     >
-                      <Download className="h-5 w-5 text-gray-700" />
+                      <Download className="h-4 w-4" />
                     </a>
                   )}
                 </div>
