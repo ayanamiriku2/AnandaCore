@@ -13,8 +13,8 @@ pub async fn list_memos(pool: &PgPool, pagination: &PaginationParams) -> Result<
 
 pub async fn create_memo(pool: &PgPool, req: CreateMemoRequest, user_id: Uuid) -> Result<Memo, AppError> {
     let memo = sqlx::query_as::<_, Memo>(
-        "INSERT INTO memos (title, content, department_id, priority, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *"
-    ).bind(&req.title).bind(&req.content).bind(req.department_id).bind(req.priority.unwrap_or_else(|| "normal".into())).bind(user_id)
+        "INSERT INTO memos (title, content, department_id, priority, is_pinned, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *"
+    ).bind(&req.title).bind(&req.content).bind(req.department_id).bind(req.priority.unwrap_or_else(|| "normal".into())).bind(req.is_pinned.unwrap_or(false)).bind(user_id)
     .fetch_one(pool).await?;
 
     if let Some(recipients) = req.recipient_user_ids {
@@ -44,9 +44,9 @@ pub async fn create_announcement(pool: &PgPool, req: CreateAnnouncementRequest, 
 
 pub async fn update_memo(pool: &PgPool, id: Uuid, req: UpdateMemoRequest) -> Result<Memo, AppError> {
     sqlx::query_as::<_, Memo>(
-        "UPDATE memos SET title = COALESCE($2, title), content = COALESCE($3, content), priority = COALESCE($4, priority), updated_at = NOW() WHERE id = $1 RETURNING *"
+        "UPDATE memos SET title = COALESCE($2, title), content = COALESCE($3, content), priority = COALESCE($4, priority), is_pinned = COALESCE($5, is_pinned), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL RETURNING *"
     )
-    .bind(id).bind(&req.title).bind(&req.content).bind(&req.priority)
+    .bind(id).bind(&req.title).bind(&req.content).bind(&req.priority).bind(req.is_pinned)
     .fetch_one(pool).await.map_err(AppError::from)
 }
 

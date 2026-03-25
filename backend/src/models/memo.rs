@@ -25,6 +25,7 @@ pub struct CreateMemoRequest {
     pub content: String,
     pub department_id: Option<Uuid>,
     pub priority: Option<String>,
+    pub is_pinned: Option<bool>,
     pub recipient_user_ids: Option<Vec<Uuid>>,
 }
 
@@ -33,6 +34,7 @@ pub struct UpdateMemoRequest {
     pub title: Option<String>,
     pub content: Option<String>,
     pub priority: Option<String>,
+    pub is_pinned: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]

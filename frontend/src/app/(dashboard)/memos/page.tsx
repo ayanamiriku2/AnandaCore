@@ -13,7 +13,7 @@ import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePagination } from "@/hooks/use-pagination";
 import { formatDate } from "@/lib/utils";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Trash2, Pin } from "lucide-react";
 import { toast } from "sonner";
 import type { Memo, PaginatedResponse } from "@/types";
 
@@ -28,16 +28,18 @@ export default function MemosPage() {
     title: "",
     content: "",
     priority: "normal",
+    is_pinned: false,
   });
 
   const resetForm = () =>
-    setForm({ title: "", content: "", priority: "normal" });
+    setForm({ title: "", content: "", priority: "normal", is_pinned: false });
 
   const openEdit = (item: Memo) => {
     setForm({
       title: item.title || "",
       content: item.content || "",
       priority: item.priority || "normal",
+      is_pinned: item.is_pinned || false,
     });
     setEditItem(item);
   };
@@ -124,7 +126,15 @@ export default function MemosPage() {
     {
       key: "is_pinned",
       header: "Disematkan",
-      render: (item: Memo) => (item.is_pinned ? "Ya" : "-"),
+      render: (item: Memo) => (
+        item.is_pinned ? (
+          <span className="inline-flex items-center gap-1 text-amber-600">
+            <Pin className="h-3.5 w-3.5" /> Ya
+          </span>
+        ) : (
+          <span className="text-gray-400">-</span>
+        )
+      ),
     },
     {
       key: "created_at",
@@ -220,6 +230,42 @@ export default function MemosPage() {
               className="min-h-[120px]"
               required
             />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Prioritas</label>
+              <Select
+                value={form.priority}
+                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+              >
+                <option value="low">Rendah</option>
+                <option value="normal">Normal</option>
+                <option value="high">Tinggi</option>
+              </Select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Disematkan</label>
+              <label className="mt-2 flex cursor-pointer items-center gap-3">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.is_pinned}
+                  onClick={() => setForm({ ...form, is_pinned: !form.is_pinned })}
+                  className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors ${
+                    form.is_pinned ? "bg-blue-600" : "bg-gray-200"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition-transform ${
+                      form.is_pinned ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+                <span className="text-sm text-gray-600">
+                  {form.is_pinned ? "Ya, sematkan di atas" : "Tidak disematkan"}
+                </span>
+              </label>
+            </div>
           </div>
           <div className="flex justify-end gap-3">
             <Button
