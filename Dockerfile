@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Build Rust Backend
 # ============================================
-FROM rust:latest AS backend-builder
+FROM rust:bookworm AS backend-builder
 WORKDIR /app
 COPY backend/Cargo.toml backend/Cargo.lock* ./
 RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
