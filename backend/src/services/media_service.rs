@@ -6,7 +6,9 @@ pub async fn list_albums(pool: &PgPool, pagination: &PaginationParams) -> Result
     let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_albums WHERE deleted_at IS NULL")
         .fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, MediaAlbum>(
-        "SELECT * FROM media_albums WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT $1 OFFSET $2"
+        "SELECT a.*, \
+         (SELECT COUNT(*) FROM media_assets ma WHERE ma.album_id = a.id AND ma.deleted_at IS NULL) AS asset_count \
+         FROM media_albums a WHERE a.deleted_at IS NULL ORDER BY a.created_at DESC LIMIT $1 OFFSET $2"
     ).bind(pagination.per_page()).bind(pagination.offset()).fetch_all(pool).await?;
     Ok(PaginatedResponse::new(data, total, pagination))
 }

@@ -21,12 +21,42 @@ import {
   FolderOpen,
   Image,
   Video,
-  Film,
+  FileText,
+  FileArchive,
+  Music,
   Download,
   X,
+  Share2,
+  Link2,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { MediaAlbum, MediaAsset } from "@/types";
+
+function getAssetIcon(mediaType: string, mime?: string) {
+  if (mediaType === "image") return <Image className="h-8 w-8 text-blue-400" />;
+  if (mediaType === "video") return <Video className="h-8 w-8 text-purple-400" />;
+  if (mediaType === "audio") return <Music className="h-8 w-8 text-orange-400" />;
+  if (mime?.includes("zip") || mime?.includes("rar") || mime?.includes("7z") || mime?.includes("tar") || mime?.includes("gzip"))
+    return <FileArchive className="h-8 w-8 text-yellow-500" />;
+  return <FileText className="h-8 w-8 text-gray-400" />;
+}
+
+function getSmallAssetIcon(mediaType: string, mime?: string) {
+  if (mediaType === "image") return <Image className="h-4 w-4 text-blue-400" />;
+  if (mediaType === "video") return <Video className="h-4 w-4 text-purple-400" />;
+  if (mediaType === "audio") return <Music className="h-4 w-4 text-orange-400" />;
+  if (mime?.includes("zip") || mime?.includes("rar") || mime?.includes("7z") || mime?.includes("tar") || mime?.includes("gzip"))
+    return <FileArchive className="h-4 w-4 text-yellow-500" />;
+  return <FileText className="h-4 w-4 text-gray-400" />;
+}
+
+function formatFileSize(bytes?: number) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 export default function MediaAlbumDetailPage() {
   const params = useParams();
@@ -40,6 +70,8 @@ export default function MediaAlbumDetailPage() {
   const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [editForm, setEditForm] = useState({ title: "", description: "" });
+  const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
+  const [copiedAlbum, setCopiedAlbum] = useState(false);
 
   const { data: albumData, isLoading } = useQuery<{ album: MediaAlbum; assets: MediaAsset[] }>({
     queryKey: ["media-album", id],
@@ -61,17 +93,19 @@ export default function MediaAlbumDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["media-album", id] });
+      queryClient.invalidateQueries({ queryKey: ["media-albums"] });
       setShowUpload(false);
       setPendingFiles([]);
-      toast.success("Media berhasil diunggah");
+      toast.success("File berhasil diunggah");
     },
-    onError: () => toast.error("Gagal mengunggah media"),
+    onError: () => toast.error("Gagal mengunggah file"),
   });
 
   const updateAlbumMutation = useMutation({
     mutationFn: (data: typeof editForm) => api.put(`/media/albums/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["media-album", id] });
+      queryClient.invalidateQueries({ queryKey: ["media-albums"] });
       setShowEdit(false);
       toast.success("Album berhasil diperbarui");
     },
@@ -100,22 +134,36 @@ export default function MediaAlbumDetailPage() {
     mutationFn: (assetId: string) => api.delete(`/media/assets/${assetId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["media-album", id] });
+      queryClient.invalidateQueries({ queryKey: ["media-albums"] });
       setShowDeleteAsset(null);
-      toast.success("Media berhasil dihapus");
+      toast.success("File berhasil dihapus");
     },
-    onError: () => toast.error("Gagal menghapus media"),
+    onError: () => toast.error("Gagal menghapus file"),
   });
+
+  const copyAlbumLink = () => {
+    const url = `${window.location.origin}/media/${id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedAlbum(true);
+      toast.success("Link album disalin ke clipboard");
+      setTimeout(() => setCopiedAlbum(false), 2000);
+    });
+  };
+
+  const copyAssetLink = (e: React.MouseEvent, asset: MediaAsset) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}/api/files/${asset.file_path}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopiedAssetId(asset.id);
+      toast.success("Link file disalin ke clipboard");
+      setTimeout(() => setCopiedAssetId(null), 2000);
+    });
+  };
 
   if (isLoading) return <PageLoading />;
   if (!album) return <div className="p-6">Album tidak ditemukan</div>;
 
   const isDeleted = !!(album as MediaAlbum & { deleted_at?: string }).deleted_at;
-
-  const assetIcon = (type: string) => {
-    if (type === "video") return <Video className="h-8 w-8 text-purple-400" />;
-    if (type === "image") return <Image className="h-8 w-8 text-blue-400" />;
-    return <Film className="h-8 w-8 text-gray-400" />;
-  };
 
   const openEdit = () => {
     setEditForm({ title: album.title, description: album.description || "" });
@@ -125,7 +173,7 @@ export default function MediaAlbumDetailPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <button
             onClick={() => router.push("/media")}
@@ -140,9 +188,9 @@ export default function MediaAlbumDetailPage() {
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold">{album.title}</h1>
-                <div className="flex items-center gap-2 mt-0.5 text-sm text-gray-500">
+                <div className="flex flex-wrap items-center gap-2 mt-0.5 text-sm text-gray-500">
                   {album.album_date && <span>{formatDate(album.album_date)}</span>}
-                  <span>{assets?.length ?? 0} media</span>
+                  <span>{assets?.length ?? 0} file</span>
                   {isDeleted && <Badge variant="danger">Dihapus</Badge>}
                 </div>
               </div>
@@ -152,14 +200,26 @@ export default function MediaAlbumDetailPage() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {!isDeleted && (
             <>
-              <Button variant="outline" onClick={openEdit}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyAlbumLink}
+              >
+                {copiedAlbum ? (
+                  <Check className="mr-2 h-4 w-4 text-green-500" />
+                ) : (
+                  <Share2 className="mr-2 h-4 w-4" />
+                )}
+                {copiedAlbum ? "Tersalin" : "Bagikan"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={openEdit}>
                 Edit
               </Button>
-              <Button onClick={() => setShowUpload(true)}>
-                <Upload className="mr-2 h-4 w-4" /> Unggah Media
+              <Button size="sm" onClick={() => setShowUpload(true)}>
+                <Upload className="mr-2 h-4 w-4" /> Unggah File
               </Button>
               <button
                 onClick={() => setShowDelete(true)}
@@ -194,15 +254,23 @@ export default function MediaAlbumDetailPage() {
                   }}
                 />
               ) : (
-                <div className="flex aspect-square items-center justify-center bg-gray-50">
-                  {assetIcon(asset.media_type)}
+                <div className="flex aspect-square flex-col items-center justify-center gap-2 bg-gray-50">
+                  {getAssetIcon(asset.media_type, asset.file_mime || undefined)}
+                  <span className="text-xs text-gray-400 uppercase">
+                    {asset.file_name?.split(".").pop() || asset.media_type}
+                  </span>
                 </div>
               )}
               <div className="p-2">
                 <p className="truncate text-xs font-medium">
                   {asset.title || asset.file_name || "Untitled"}
                 </p>
-                <p className="text-xs text-gray-400">{asset.media_type}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  {getSmallAssetIcon(asset.media_type, asset.file_mime || undefined)}
+                  <span className="text-xs text-gray-400">
+                    {asset.file_size ? formatFileSize(asset.file_size) : asset.media_type}
+                  </span>
+                </div>
               </div>
               {/* Actions overlay */}
               <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
@@ -212,13 +280,26 @@ export default function MediaAlbumDetailPage() {
                     className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
                     download
                     onClick={(e) => e.stopPropagation()}
+                    title="Unduh"
                   >
                     <Download className="h-4 w-4 text-gray-700" />
                   </a>
                 )}
                 <button
+                  onClick={(e) => copyAssetLink(e, asset)}
+                  className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
+                  title="Salin link"
+                >
+                  {copiedAssetId === asset.id ? (
+                    <Check className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <Link2 className="h-4 w-4 text-gray-700" />
+                  )}
+                </button>
+                <button
                   onClick={(e) => { e.stopPropagation(); setShowDeleteAsset(asset.id); }}
                   className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
+                  title="Hapus"
                 >
                   <X className="h-4 w-4 text-red-500" />
                 </button>
@@ -227,19 +308,19 @@ export default function MediaAlbumDetailPage() {
           ))
         ) : (
           <div className="col-span-full py-16 text-center text-sm text-gray-500">
-            Belum ada media di album ini
+            Belum ada file di album ini. Klik &quot;Unggah File&quot; untuk menambahkan.
           </div>
         )}
       </div>
 
       {/* Upload Modal */}
-      <Modal open={showUpload} onClose={() => setShowUpload(false)} title="Unggah Media" size="lg">
+      <Modal open={showUpload} onClose={() => setShowUpload(false)} title="Unggah File" size="lg">
         <div className="space-y-4">
           <FileUpload
             onFilesSelected={(selected) => setPendingFiles(selected)}
-            accept="image/*,video/*"
             multiple
-            maxSizeMB={50}
+            maxSizeMB={100}
+            label="Seret file ke sini atau klik untuk memilih (gambar, video, dokumen, arsip, dll)"
           />
           <div className="flex justify-end gap-3">
             <Button variant="outline" onClick={() => setShowUpload(false)}>
@@ -296,7 +377,7 @@ export default function MediaAlbumDetailPage() {
         onClose={() => setShowDelete(false)}
         onConfirm={() => deleteAlbumMutation.mutate()}
         title="Hapus Album"
-        message={`Album "${album.title}" dan semua medianya akan dipindahkan ke sampah.`}
+        message={`Album "${album.title}" dan semua file-nya akan dipindahkan ke sampah.`}
         confirmLabel="Hapus"
         variant="danger"
         loading={deleteAlbumMutation.isPending}
@@ -307,8 +388,8 @@ export default function MediaAlbumDetailPage() {
         open={!!showDeleteAsset}
         onClose={() => setShowDeleteAsset(null)}
         onConfirm={() => showDeleteAsset && deleteAssetMutation.mutate(showDeleteAsset)}
-        title="Hapus Media"
-        message="Media ini akan dihapus secara permanen."
+        title="Hapus File"
+        message="File ini akan dihapus secara permanen."
         confirmLabel="Hapus"
         variant="danger"
         loading={deleteAssetMutation.isPending}
@@ -343,23 +424,54 @@ export default function MediaAlbumDetailPage() {
                 autoPlay
                 className="max-h-[85vh] max-w-[90vw] rounded-lg"
               />
+            ) : previewAsset.media_type === "audio" && previewAsset.file_path ? (
+              <div className="flex flex-col items-center gap-6 rounded-lg bg-white p-12">
+                <Music className="h-16 w-16 text-orange-400" />
+                <p className="text-sm font-medium">{previewAsset.title || previewAsset.file_name}</p>
+                <audio src={`/api/files/${previewAsset.file_path}`} controls autoPlay className="w-80" />
+              </div>
             ) : (
               <div className="flex flex-col items-center gap-4 rounded-lg bg-white p-12">
-                {assetIcon(previewAsset.media_type)}
+                {getAssetIcon(previewAsset.media_type, previewAsset.file_mime || undefined)}
                 <p className="text-sm font-medium">{previewAsset.title || previewAsset.file_name}</p>
+                {previewAsset.file_size && (
+                  <p className="text-xs text-gray-400">{formatFileSize(previewAsset.file_size)}</p>
+                )}
+                {previewAsset.file_path && (
+                  <a
+                    href={`/api/files/${previewAsset.file_path}`}
+                    download
+                    className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                  >
+                    <Download className="h-4 w-4" /> Unduh File
+                  </a>
+                )}
               </div>
             )}
             <div className="mt-3 flex items-center justify-between text-sm text-white/80">
               <span>{previewAsset.title || previewAsset.file_name || "Untitled"}</span>
-              {previewAsset.file_path && (
-                <a
-                  href={`/api/files/${previewAsset.file_path}`}
-                  download
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={(e) => copyAssetLink(e, previewAsset)}
                   className="flex items-center gap-1 rounded-md bg-white/10 px-3 py-1.5 text-white hover:bg-white/20"
                 >
-                  <Download className="h-4 w-4" /> Unduh
-                </a>
-              )}
+                  {copiedAssetId === previewAsset.id ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Share2 className="h-4 w-4" />
+                  )}
+                  {copiedAssetId === previewAsset.id ? "Tersalin" : "Bagikan"}
+                </button>
+                {previewAsset.file_path && (
+                  <a
+                    href={`/api/files/${previewAsset.file_path}`}
+                    download
+                    className="flex items-center gap-1 rounded-md bg-white/10 px-3 py-1.5 text-white hover:bg-white/20"
+                  >
+                    <Download className="h-4 w-4" /> Unduh
+                  </a>
+                )}
+              </div>
             </div>
           </div>
         </div>

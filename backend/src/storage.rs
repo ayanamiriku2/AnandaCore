@@ -108,6 +108,7 @@ impl StorageService {
 
     pub fn validate_file_type(mime: &str) -> bool {
         let allowed = [
+            // Documents
             "application/pdf",
             "application/msword",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -115,20 +116,53 @@ impl StorageService {
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             "application/vnd.ms-powerpoint",
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "application/rtf",
+            "text/plain",
+            "text/csv",
+            "text/html",
+            "application/json",
+            "application/xml",
+            "text/xml",
+            // Archives
             "application/zip",
+            "application/x-zip-compressed",
             "application/x-rar-compressed",
+            "application/vnd.rar",
+            "application/x-7z-compressed",
+            "application/x-tar",
+            "application/gzip",
+            "application/x-gzip",
+            "application/x-bzip2",
+            "application/x-xz",
+            // Images
             "image/jpeg",
             "image/png",
             "image/gif",
             "image/webp",
             "image/svg+xml",
+            "image/bmp",
+            "image/tiff",
+            "image/heic",
+            "image/heif",
+            // Video
             "video/mp4",
             "video/quicktime",
             "video/x-msvideo",
-            "text/plain",
-            "text/csv",
+            "video/webm",
+            "video/x-matroska",
+            // Audio
+            "audio/mpeg",
+            "audio/wav",
+            "audio/ogg",
+            "audio/mp4",
+            "audio/webm",
+            "audio/flac",
         ];
-        allowed.contains(&mime)
+        if allowed.contains(&mime) {
+            return true;
+        }
+        // Also allow application/octet-stream for unknown binary files
+        mime == "application/octet-stream"
     }
 
     pub fn max_file_size() -> usize {

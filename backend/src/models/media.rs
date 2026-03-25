@@ -18,6 +18,8 @@ pub struct MediaAlbum {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
+    #[sqlx(default)]
+    pub asset_count: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
