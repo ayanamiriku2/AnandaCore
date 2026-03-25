@@ -50,6 +50,9 @@ mime_guess = "2"
 # CSV/Excel export
 csv = "1"
 
+# ZIP
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
 # Decimal
 rust_decimal = { version = "1", features = ["serde-with-str"] }
 

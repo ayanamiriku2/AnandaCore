@@ -1,7 +1,11 @@
 use axum::{
+    body::Body,
     extract::{Multipart, Path, Query, State},
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
     Json,
 };
+use std::io::{Write, Cursor};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -40,6 +44,78 @@ pub async fn get_album_public(
     let album = media_service::get_album(&state.db, id).await?;
     let assets = media_service::get_album_assets(&state.db, id).await?;
     Ok(Json(serde_json::json!({"album": album, "assets": assets})))
+}
+
+/// Public endpoint - download all album assets as ZIP
+pub async fn download_album_zip(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> Result<Response, AppError> {
+    let album = media_service::get_album(&state.db, id).await?;
+    let assets = media_service::get_album_assets(&state.db, id).await?;
+
+    if assets.is_empty() {
+        return Err(AppError::BadRequest("Album tidak memiliki file".into()));
+    }
+
+    let buf = Cursor::new(Vec::new());
+    let mut zip_writer = zip::ZipWriter::new(buf);
+    let options = zip::write::SimpleFileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated);
+
+    let mut used_names = std::collections::HashSet::new();
+
+    for asset in &assets {
+        let base_name = asset.file_name
+            .clone()
+            .unwrap_or_else(|| asset.file_path.split('/').last().unwrap_or("file").to_string());
+
+        // Deduplicate filenames
+        let mut name = base_name.clone();
+        let mut counter = 1u32;
+        while used_names.contains(&name) {
+            let stem = std::path::Path::new(&base_name)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("file");
+            let ext = std::path::Path::new(&base_name)
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("bin");
+            name = format!("{}_{}.{}", stem, counter, ext);
+            counter += 1;
+        }
+        used_names.insert(name.clone());
+
+        match state.storage.download(&asset.file_path).await {
+            Ok(data) => {
+                if zip_writer.start_file(&name, options).is_ok() {
+                    let _ = zip_writer.write_all(&data);
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+
+    let cursor = zip_writer.finish()
+        .map_err(|e| AppError::Internal(format!("Gagal membuat ZIP: {}", e)))?;
+    let zip_bytes = cursor.into_inner();
+
+    let safe_title = album.title
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == ' ' { c } else { '_' })
+        .collect::<String>();
+
+    Ok(Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/zip")
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}.zip\"", safe_title),
+        )
+        .header(header::CONTENT_LENGTH, zip_bytes.len())
+        .body(Body::from(zip_bytes))
+        .unwrap())
 }
 
 pub async fn create_album(

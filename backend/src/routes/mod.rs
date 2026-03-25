@@ -13,7 +13,8 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
         .route("/auth/refresh", post(auth_handler::refresh))
         .route("/health", get(|| async { axum::Json(serde_json::json!({"status": "ok", "service": "AnandaCore API"})) }))
         .route("/files/*key", get(file_handler::download))
-        .route("/media/albums/:id/public", get(media_handler::get_album_public));
+        .route("/media/albums/:id/public", get(media_handler::get_album_public))
+        .route("/media/albums/:id/download-zip", get(media_handler::download_album_zip));
 
     let protected = Router::new()
         // Auth
