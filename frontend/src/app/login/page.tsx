@@ -26,11 +26,6 @@ export default function LoginPage() {
     }
   }
 
-  function fillDemo() {
-    setEmail("muktimochamadpratama23@gmail.com");
-    setPassword("Anonymous263");
-  }
-
   return (
     <div
       style={{
@@ -393,78 +388,6 @@ export default function LoginPage() {
               )}
             </button>
           </form>
-
-          {/* Demo Credentials */}
-          <div
-            style={{
-              marginTop: "32px",
-              padding: "16px 20px",
-              borderRadius: "12px",
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "11px",
-                fontWeight: 700,
-                color: "#1d4ed8",
-                textTransform: "uppercase",
-                letterSpacing: "1px",
-                marginBottom: "10px",
-              }}
-            >
-              Demo Credentials
-            </div>
-            <table style={{ fontSize: "13px", color: "#1e3a5f", borderCollapse: "collapse" }}>
-              <tbody>
-                <tr>
-                  <td style={{ paddingRight: "12px", paddingBottom: "4px", color: "#3b82f6", fontWeight: 500 }}>
-                    Email
-                  </td>
-                  <td style={{ paddingBottom: "4px" }}>
-                    <button
-                      type="button"
-                      onClick={fillDemo}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        fontFamily: "monospace",
-                        fontSize: "13px",
-                        color: "#1e3a5f",
-                        padding: 0,
-                        textDecoration: "underline",
-                        textDecorationColor: "#93c5fd",
-                        textUnderlineOffset: "2px",
-                      }}
-                    >
-                      muktimochamadpratama23@gmail.com
-                    </button>
-                  </td>
-                </tr>
-                <tr>
-                  <td style={{ paddingRight: "12px", color: "#3b82f6", fontWeight: 500 }}>
-                    Password
-                  </td>
-                  <td>
-                    <code
-                      style={{
-                        fontFamily: "monospace",
-                        fontSize: "13px",
-                        background: "#dbeafe",
-                        padding: "2px 6px",
-                        borderRadius: "4px",
-                        color: "#1e3a5f",
-                      }}
-                    >
-                      Anonymous263
-                    </code>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
 
           {/* Footer */}
           <p
