@@ -58,7 +58,7 @@ export default function PartnerDetailPage() {
 
   const { data: partner, isLoading } = useQuery<Partner>({
     queryKey: ["partner", id],
-    queryFn: () => api.get(`/partners/${id}`).then((r) => r.data),
+    queryFn: () => api.get(`/partners/${id}`).then((r) => r.data.partner),
   });
 
   const { data: contacts } = useQuery<PartnerContact[]>({
