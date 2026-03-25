@@ -11,7 +11,8 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
     let public = Router::new()
         .route("/auth/login", post(auth_handler::login))
         .route("/auth/refresh", post(auth_handler::refresh))
-        .route("/health", get(|| async { axum::Json(serde_json::json!({"status": "ok", "service": "AnandaCore API"})) }));
+        .route("/health", get(|| async { axum::Json(serde_json::json!({"status": "ok", "service": "AnandaCore API"})) }))
+        .route("/files/*key", get(file_handler::download));
 
     let protected = Router::new()
         // Auth
@@ -105,7 +106,6 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Files
         .route("/files/upload", post(file_handler::upload))
-        .route("/files/*key", get(file_handler::download))
 
         // Master Data
         .route("/master/departments", get(master_data_handler::list_departments).post(master_data_handler::create_department))

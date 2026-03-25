@@ -37,6 +37,7 @@ export default function MediaAlbumDetailPage() {
   const [showEdit, setShowEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [showDeleteAsset, setShowDeleteAsset] = useState<string | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [editForm, setEditForm] = useState({ title: "", description: "" });
 
@@ -182,13 +183,14 @@ export default function MediaAlbumDetailPage() {
           assets.map((asset) => (
             <div
               key={asset.id}
-              className="group relative rounded-lg border overflow-hidden"
+              className="group relative cursor-pointer rounded-lg border overflow-hidden"
+              onClick={() => setPreviewAsset(asset)}
             >
               {asset.media_type === "image" && asset.file_path ? (
                 <div
                   className="aspect-square bg-gray-100 bg-cover bg-center"
                   style={{
-                    backgroundImage: `url(/api/media/assets/${asset.id}/download)`,
+                    backgroundImage: `url(/api/files/${asset.file_path})`,
                   }}
                 />
               ) : (
@@ -206,15 +208,16 @@ export default function MediaAlbumDetailPage() {
               <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                 {asset.file_path && (
                   <a
-                    href={`/api/media/assets/${asset.id}/download`}
+                    href={`/api/files/${asset.file_path}`}
                     className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
                     download
+                    onClick={(e) => e.stopPropagation()}
                   >
                     <Download className="h-4 w-4 text-gray-700" />
                   </a>
                 )}
                 <button
-                  onClick={() => setShowDeleteAsset(asset.id)}
+                  onClick={(e) => { e.stopPropagation(); setShowDeleteAsset(asset.id); }}
                   className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
                 >
                   <X className="h-4 w-4 text-red-500" />
@@ -310,6 +313,57 @@ export default function MediaAlbumDetailPage() {
         variant="danger"
         loading={deleteAssetMutation.isPending}
       />
+
+      {/* Preview Lightbox */}
+      {previewAsset && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setPreviewAsset(null)}
+        >
+          <button
+            onClick={() => setPreviewAsset(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20"
+          >
+            <X className="h-6 w-6" />
+          </button>
+          <div
+            className="relative max-h-[90vh] max-w-[90vw]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {previewAsset.media_type === "image" && previewAsset.file_path ? (
+              <img
+                src={`/api/files/${previewAsset.file_path}`}
+                alt={previewAsset.title || previewAsset.file_name || "Preview"}
+                className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain"
+              />
+            ) : previewAsset.media_type === "video" && previewAsset.file_path ? (
+              <video
+                src={`/api/files/${previewAsset.file_path}`}
+                controls
+                autoPlay
+                className="max-h-[85vh] max-w-[90vw] rounded-lg"
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-4 rounded-lg bg-white p-12">
+                {assetIcon(previewAsset.media_type)}
+                <p className="text-sm font-medium">{previewAsset.title || previewAsset.file_name}</p>
+              </div>
+            )}
+            <div className="mt-3 flex items-center justify-between text-sm text-white/80">
+              <span>{previewAsset.title || previewAsset.file_name || "Untitled"}</span>
+              {previewAsset.file_path && (
+                <a
+                  href={`/api/files/${previewAsset.file_path}`}
+                  download
+                  className="flex items-center gap-1 rounded-md bg-white/10 px-3 py-1.5 text-white hover:bg-white/20"
+                >
+                  <Download className="h-4 w-4" /> Unduh
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
