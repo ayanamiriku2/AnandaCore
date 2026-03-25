@@ -2,40 +2,48 @@ use sqlx::PgPool;
 use crate::errors::AppError;
 
 pub async fn get_overview(pool: &PgPool) -> Result<serde_json::Value, AppError> {
-    let total_programs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM programs WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let active_programs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM programs WHERE status = 'aktif' AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let total_documents: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM documents WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let total_letters: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM letters WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let letters_in: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM letters WHERE letter_type = 'masuk' AND deleted_at IS NULL AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW())").fetch_one(pool).await.unwrap_or(0);
-    let letters_out: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM letters WHERE letter_type = 'keluar' AND deleted_at IS NULL AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW())").fetch_one(pool).await.unwrap_or(0);
-    let total_activities: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM activities WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let total_partners: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM partners WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let total_beneficiaries: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM beneficiaries WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let total_tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let pending_tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE status != 'selesai' AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let overdue_tasks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM tasks WHERE due_date < NOW() AND status != 'selesai' AND deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
-    let total_assets: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM assets WHERE deleted_at IS NULL").fetch_one(pool).await.unwrap_or(0);
+    // Single consolidated query for all counts — replaces 15 sequential queries
+    let counts_query = sqlx::query_as::<_, (i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64, i64)>(
+        "SELECT \
+            (SELECT COUNT(*) FROM programs WHERE deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM programs WHERE status = 'aktif' AND deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM documents WHERE deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM letters WHERE deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM letters WHERE letter_type = 'masuk' AND deleted_at IS NULL AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW()) AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())), \
+            (SELECT COUNT(*) FROM letters WHERE letter_type = 'keluar' AND deleted_at IS NULL AND EXTRACT(MONTH FROM created_at) = EXTRACT(MONTH FROM NOW()) AND EXTRACT(YEAR FROM created_at) = EXTRACT(YEAR FROM NOW())), \
+            (SELECT COUNT(*) FROM activities WHERE deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM partners WHERE deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM beneficiaries WHERE deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM tasks WHERE deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM tasks WHERE status != 'selesai' AND deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM tasks WHERE due_date < NOW() AND status != 'selesai' AND deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM assets WHERE deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM partnership_agreements WHERE end_date BETWEEN NOW() AND NOW() + INTERVAL '90 days' AND status = 'aktif' AND deleted_at IS NULL), \
+            (SELECT COUNT(*) FROM documents WHERE retention_until BETWEEN NOW() AND NOW() + INTERVAL '90 days' AND deleted_at IS NULL)"
+    ).fetch_one(pool);
 
-    let expiring_mou: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM partnership_agreements WHERE end_date BETWEEN NOW() AND NOW() + INTERVAL '90 days' AND status = 'aktif' AND deleted_at IS NULL"
-    ).fetch_one(pool).await.unwrap_or(0);
-
-    let expiring_docs: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM documents WHERE retention_until BETWEEN NOW() AND NOW() + INTERVAL '90 days' AND deleted_at IS NULL"
-    ).fetch_one(pool).await.unwrap_or(0);
-
-    // Recent activities (last 5)
-    let recent_activities: Vec<(uuid::Uuid, String, Option<String>, Option<chrono::NaiveDate>, Option<String>)> = sqlx::query_as(
+    let recent_activities_query = sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, Option<chrono::NaiveDate>, Option<String>)>(
         "SELECT a.id, a.name, p.name as program_name, a.activity_date, a.status \
          FROM activities a LEFT JOIN programs p ON a.program_id = p.id \
          WHERE a.deleted_at IS NULL ORDER BY a.created_at DESC LIMIT 5"
-    ).fetch_all(pool).await.unwrap_or_default();
+    ).fetch_all(pool);
 
-    // Recent documents (last 5)
-    let recent_documents: Vec<(uuid::Uuid, String, Option<String>, chrono::DateTime<chrono::Utc>)> = sqlx::query_as(
+    let recent_documents_query = sqlx::query_as::<_, (uuid::Uuid, String, Option<String>, chrono::DateTime<chrono::Utc>)>(
         "SELECT id, title, document_number, created_at FROM documents \
          WHERE deleted_at IS NULL ORDER BY created_at DESC LIMIT 5"
-    ).fetch_all(pool).await.unwrap_or_default();
+    ).fetch_all(pool);
+
+    // Run all 3 queries in parallel
+    let (counts_result, activities_result, documents_result) =
+        tokio::try_join!(counts_query, recent_activities_query, recent_documents_query)
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let (
+        total_programs, active_programs, total_documents, total_letters,
+        letters_in, letters_out, total_activities, total_partners,
+        total_beneficiaries, total_tasks, pending_tasks, overdue_tasks,
+        total_assets, expiring_mou, expiring_docs,
+    ) = counts_result;
 
     Ok(serde_json::json!({
         "total_programs": total_programs,
@@ -53,7 +61,7 @@ pub async fn get_overview(pool: &PgPool) -> Result<serde_json::Value, AppError> 
         "tugas_terlambat": overdue_tasks,
         "mou_hampir_habis": expiring_mou,
         "dokumen_hampir_kedaluwarsa": expiring_docs,
-        "recent_activities": recent_activities.iter().map(|(id, name, program_name, start_date, status)| {
+        "recent_activities": activities_result.iter().map(|(id, name, program_name, start_date, status)| {
             serde_json::json!({
                 "id": id,
                 "name": name,
@@ -62,7 +70,7 @@ pub async fn get_overview(pool: &PgPool) -> Result<serde_json::Value, AppError> 
                 "status": status,
             })
         }).collect::<Vec<_>>(),
-        "recent_documents": recent_documents.iter().map(|(id, title, doc_number, created_at)| {
+        "recent_documents": documents_result.iter().map(|(id, title, doc_number, created_at)| {
             serde_json::json!({
                 "id": id,
                 "title": title,
@@ -74,25 +82,21 @@ pub async fn get_overview(pool: &PgPool) -> Result<serde_json::Value, AppError> 
 }
 
 pub async fn get_charts(pool: &PgPool) -> Result<serde_json::Value, AppError> {
-    // Documents per month (last 12 months)
-    let doc_trend: Vec<(i32, i64)> = sqlx::query_as(
-        "SELECT EXTRACT(MONTH FROM created_at)::int as month, COUNT(*) as count FROM documents WHERE created_at > NOW() - INTERVAL '12 months' AND deleted_at IS NULL GROUP BY month ORDER BY month"
-    ).fetch_all(pool).await.unwrap_or_default();
-
-    // Activities per month
-    let activity_trend: Vec<(i32, i64)> = sqlx::query_as(
-        "SELECT EXTRACT(MONTH FROM activity_date)::int as month, COUNT(*) as count FROM activities WHERE activity_date > NOW() - INTERVAL '12 months' AND deleted_at IS NULL GROUP BY month ORDER BY month"
-    ).fetch_all(pool).await.unwrap_or_default();
-
-    // Letters by status
-    let letter_status: Vec<(String, i64)> = sqlx::query_as(
-        "SELECT status, COUNT(*) FROM letters WHERE deleted_at IS NULL GROUP BY status"
-    ).fetch_all(pool).await.unwrap_or_default();
-
-    // Document categories distribution
-    let doc_categories: Vec<(Option<uuid::Uuid>, i64)> = sqlx::query_as(
-        "SELECT category_id, COUNT(*) FROM documents WHERE deleted_at IS NULL GROUP BY category_id ORDER BY count DESC LIMIT 10"
-    ).fetch_all(pool).await.unwrap_or_default();
+    // Run all 4 chart queries in parallel
+    let (doc_trend, activity_trend, letter_status, doc_categories) = tokio::try_join!(
+        sqlx::query_as::<_, (i32, i64)>(
+            "SELECT EXTRACT(MONTH FROM created_at)::int as month, COUNT(*) as count FROM documents WHERE created_at > NOW() - INTERVAL '12 months' AND deleted_at IS NULL GROUP BY month ORDER BY month"
+        ).fetch_all(pool),
+        sqlx::query_as::<_, (i32, i64)>(
+            "SELECT EXTRACT(MONTH FROM activity_date)::int as month, COUNT(*) as count FROM activities WHERE activity_date > NOW() - INTERVAL '12 months' AND deleted_at IS NULL GROUP BY month ORDER BY month"
+        ).fetch_all(pool),
+        sqlx::query_as::<_, (String, i64)>(
+            "SELECT status, COUNT(*) FROM letters WHERE deleted_at IS NULL GROUP BY status"
+        ).fetch_all(pool),
+        sqlx::query_as::<_, (Option<uuid::Uuid>, i64)>(
+            "SELECT category_id, COUNT(*) FROM documents WHERE deleted_at IS NULL GROUP BY category_id ORDER BY count DESC LIMIT 10"
+        ).fetch_all(pool),
+    ).map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(serde_json::json!({
         "document_trend": doc_trend.iter().map(|(m,c)| serde_json::json!({"month": m, "count": c})).collect::<Vec<_>>(),

@@ -3,7 +3,6 @@
 import { useQuery } from "@tanstack/react-query";
 import api from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageLoading } from "@/components/ui/loading";
 import { formatDate } from "@/lib/utils";
 import {
   FileText,
@@ -31,13 +30,91 @@ import type { DashboardOverview } from "@/types";
 
 const COLORS = ["#2563eb", "#16a34a", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
+function StatCardSkeleton() {
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-4 p-6">
+        <div className="h-12 w-12 rounded-lg bg-[var(--muted)] animate-pulse" />
+        <div className="space-y-2">
+          <div className="h-6 w-16 rounded bg-[var(--muted)] animate-pulse" />
+          <div className="h-4 w-24 rounded bg-[var(--muted)] animate-pulse" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="h-5 w-32 rounded bg-[var(--muted)] animate-pulse" />
+      </CardHeader>
+      <CardContent>
+        <div className="h-[300px] rounded bg-[var(--muted)] animate-pulse" />
+      </CardContent>
+    </Card>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="h-5 w-36 rounded bg-[var(--muted)] animate-pulse" />
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-3">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center justify-between rounded-md border p-3">
+              <div className="space-y-2">
+                <div className="h-4 w-40 rounded bg-[var(--muted)] animate-pulse" />
+                <div className="h-3 w-24 rounded bg-[var(--muted)] animate-pulse" />
+              </div>
+              <div className="h-3 w-20 rounded bg-[var(--muted)] animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold">Dashboard</h1>
+        <p className="text-[var(--muted-foreground)]">
+          Selamat datang di AnandaCore - Sistem Manajemen Yayasan Kasih Ananda
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <StatCardSkeleton key={i} />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ChartSkeleton />
+        <ChartSkeleton />
+      </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ListSkeleton />
+        <ListSkeleton />
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { data, isLoading } = useQuery<DashboardOverview>({
     queryKey: ["dashboard"],
     queryFn: () => api.get("/dashboard/overview").then((r) => r.data),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 
-  if (isLoading || !data) return <PageLoading />;
+  if (isLoading || !data) return <DashboardSkeleton />;
 
   const stats = [
     {
