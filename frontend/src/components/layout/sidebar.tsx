@@ -20,7 +20,6 @@ import {
   StickyNote,
   Building2,
   ChevronDown,
-  Heart,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -97,7 +96,7 @@ export function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 flex h-screen w-[var(--sidebar-width)] flex-col border-r border-[var(--border)] bg-white">
       <div className="flex h-16 items-center gap-2 border-b px-6">
-        <Heart className="h-6 w-6 text-[var(--primary)]" />
+        <img src="/logo-192.png" alt="Logo" className="h-7 w-7 rounded" />
         <span className="text-lg font-bold text-[var(--primary)]">
           AnandaCore
         </span>

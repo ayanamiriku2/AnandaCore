@@ -27,8 +27,8 @@ export default function LoginPage() {
   }
 
   function fillDemo() {
-    setEmail("admin@anandacore.io");
-    setPassword("AnandaCore2026!");
+    setEmail("muktimochamadpratama23@gmail.com");
+    setPassword("Anonymous263");
   }
 
   return (
@@ -82,20 +82,15 @@ export default function LoginPage() {
         {/* Top: Logo */}
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
+            <img
+              src="/logo-192.png"
+              alt="Logo"
               style={{
                 width: "44px",
                 height: "44px",
                 borderRadius: "12px",
-                background: "rgba(255,255,255,0.2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "20px",
               }}
-            >
-              ❤
-            </div>
+            />
             <span style={{ fontSize: "20px", fontWeight: 700, letterSpacing: "-0.5px" }}>
               AnandaCore
             </span>
@@ -192,20 +187,15 @@ export default function LoginPage() {
               marginBottom: "40px",
             }}
           >
-            <div
+            <img
+              src="/logo-192.png"
+              alt="Logo"
               style={{
                 width: "48px",
                 height: "48px",
                 borderRadius: "12px",
-                background: "#2563eb",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "22px",
               }}
-            >
-              ❤
-            </div>
+            />
             <div>
               <div style={{ fontSize: "20px", fontWeight: 700, color: "#111827" }}>
                 AnandaCore
@@ -262,7 +252,7 @@ export default function LoginPage() {
               </label>
               <input
                 type="email"
-                placeholder="nama@anandacore.io"
+                placeholder="email@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -449,7 +439,7 @@ export default function LoginPage() {
                         textUnderlineOffset: "2px",
                       }}
                     >
-                      admin@anandacore.io
+                      muktimochamadpratama23@gmail.com
                     </button>
                   </td>
                 </tr>
@@ -468,7 +458,7 @@ export default function LoginPage() {
                         color: "#1e3a5f",
                       }}
                     >
-                      AnandaCore2026!
+                      Anonymous263
                     </code>
                   </td>
                 </tr>

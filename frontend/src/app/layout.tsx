@@ -6,6 +6,10 @@ import { QueryProvider } from "@/lib/query-provider";
 export const metadata: Metadata = {
   title: "AnandaCore - Sistem Manajemen Yayasan",
   description: "Sistem manajemen internal Yayasan Kasih Ananda",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/logo-192.png",
+  },
 };
 
 export default function RootLayout({

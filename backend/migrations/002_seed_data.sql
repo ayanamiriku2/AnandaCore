@@ -58,10 +58,10 @@ INSERT INTO permissions (module, action, description) VALUES
   ('settings', 'update', 'Mengubah pengaturan')
 ON CONFLICT (module, action) DO NOTHING;
 
--- Users (password: AnandaCore2026!)
--- Argon2id hash for 'AnandaCore2026!' generated with default params (m=65536,t=3,p=4)
+-- Users (default password: AnandaCore2026!, superadmin uses custom password)
+-- Argon2id hashes generated with default params (m=65536,t=3,p=4)
 INSERT INTO users (id, email, password_hash, full_name, phone, is_active) VALUES
-  ('b0000000-0000-0000-0000-000000000001', 'admin@anandacore.io', '$argon2id$v=19$m=65536,t=3,p=4$2EYANN6KE9pNrvueLh9HDw$rlK864hzJpdIAROT12JoH47gc7DHCkbdfpYNER89qdc', 'Ahmad Rizki Pratama', '081234567890', true),
+  ('b0000000-0000-0000-0000-000000000001', 'muktimochamadpratama23@gmail.com', '$argon2id$v=19$m=65536,t=3,p=4$KEQRc602oh9GOO03154sXQ$xtD1ByqLC420HkynI8va0PM40W3SUiOONOvjgRYWCUM', 'Mochamad Pratama Mukti', '081234567890', true),
   ('b0000000-0000-0000-0000-000000000002', 'siti.nurhaliza@anandacore.io', '$argon2id$v=19$m=65536,t=3,p=4$2EYANN6KE9pNrvueLh9HDw$rlK864hzJpdIAROT12JoH47gc7DHCkbdfpYNER89qdc', 'Siti Nurhaliza Putri', '081234567891', true),
   ('b0000000-0000-0000-0000-000000000003', 'budi.santoso@anandacore.io', '$argon2id$v=19$m=65536,t=3,p=4$2EYANN6KE9pNrvueLh9HDw$rlK864hzJpdIAROT12JoH47gc7DHCkbdfpYNER89qdc', 'Budi Santoso', '081234567892', true),
   ('b0000000-0000-0000-0000-000000000004', 'dewi.lestari@anandacore.io', '$argon2id$v=19$m=65536,t=3,p=4$2EYANN6KE9pNrvueLh9HDw$rlK864hzJpdIAROT12JoH47gc7DHCkbdfpYNER89qdc', 'Dewi Lestari Wardani', '081234567893', true),
@@ -70,7 +70,11 @@ INSERT INTO users (id, email, password_hash, full_name, phone, is_active) VALUES
   ('b0000000-0000-0000-0000-000000000007', 'hendra.gunawan@anandacore.io', '$argon2id$v=19$m=65536,t=3,p=4$2EYANN6KE9pNrvueLh9HDw$rlK864hzJpdIAROT12JoH47gc7DHCkbdfpYNER89qdc', 'Hendra Gunawan', '081234567896', true),
   ('b0000000-0000-0000-0000-000000000008', 'maya.puspita@anandacore.io', '$argon2id$v=19$m=65536,t=3,p=4$2EYANN6KE9pNrvueLh9HDw$rlK864hzJpdIAROT12JoH47gc7DHCkbdfpYNER89qdc', 'Maya Puspita Sari', '081234567897', true),
   ('b0000000-0000-0000-0000-000000000009', 'farhan.hidayat@anandacore.io', '$argon2id$v=19$m=65536,t=3,p=4$2EYANN6KE9pNrvueLh9HDw$rlK864hzJpdIAROT12JoH47gc7DHCkbdfpYNER89qdc', 'Farhan Hidayat', '081234567898', true)
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET
+  email = EXCLUDED.email,
+  password_hash = EXCLUDED.password_hash,
+  full_name = EXCLUDED.full_name,
+  phone = EXCLUDED.phone;
 
 -- User Roles
 INSERT INTO user_roles (user_id, role_id) VALUES
