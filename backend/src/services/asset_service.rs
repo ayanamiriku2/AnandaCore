@@ -54,3 +54,11 @@ pub async fn update_asset(pool: &PgPool, id: Uuid, req: UpdateAssetRequest) -> R
     .bind(req.next_maintenance_date)
     .fetch_one(pool).await.map_err(AppError::from)
 }
+
+pub async fn delete_asset(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    sqlx::query("UPDATE assets SET deleted_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

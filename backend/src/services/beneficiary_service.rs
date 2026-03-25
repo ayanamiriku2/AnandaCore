@@ -52,3 +52,11 @@ pub async fn update_beneficiary(pool: &PgPool, id: Uuid, req: UpdateBeneficiaryR
     .bind(req.status_id).bind(&req.placement_status).bind(&req.internal_notes)
     .fetch_one(pool).await.map_err(AppError::from)
 }
+
+pub async fn delete_beneficiary(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    sqlx::query("UPDATE beneficiaries SET deleted_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

@@ -9,9 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePagination } from "@/hooks/use-pagination";
 import { formatDate, formatCurrency, statusColor } from "@/lib/utils";
-import { Plus, Search } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Program, PaginatedResponse } from "@/types";
 
@@ -21,6 +22,8 @@ export default function ProgramsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editItem, setEditItem] = useState<Program | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Program | null>(null);
   const [form, setForm] = useState({
     name: "",
     code: "",
@@ -30,6 +33,22 @@ export default function ProgramsPage() {
     end_date: "",
     budget: "",
   });
+
+  const resetForm = () =>
+    setForm({ name: "", code: "", description: "", status: "planning", start_date: "", end_date: "", budget: "" });
+
+  const openEdit = (item: Program) => {
+    setForm({
+      name: item.name,
+      code: item.code || "",
+      description: item.description || "",
+      status: item.status || "planning",
+      start_date: item.start_date || "",
+      end_date: item.end_date || "",
+      budget: item.budget ? String(item.budget) : "",
+    });
+    setEditItem(item);
+  };
 
   const { data, isLoading } = useQuery<PaginatedResponse<Program>>({
     queryKey: ["programs", pagination.page, pagination.per_page, search, statusFilter],
@@ -51,10 +70,46 @@ export default function ProgramsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["programs"] });
       setShowCreate(false);
+      resetForm();
       toast.success("Program berhasil dibuat");
     },
     onError: () => toast.error("Gagal membuat program"),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: string; body: Record<string, unknown> }) =>
+      api.put(`/programs/${data.id}`, data.body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["programs"] });
+      setEditItem(null);
+      resetForm();
+      toast.success("Program berhasil diperbarui");
+    },
+    onError: () => toast.error("Gagal memperbarui program"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/programs/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["programs"] });
+      setDeleteTarget(null);
+      toast.success("Program berhasil dihapus");
+    },
+    onError: () => toast.error("Gagal menghapus program"),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      ...form,
+      budget: form.budget ? Number(form.budget) : undefined,
+    };
+    if (editItem) {
+      updateMutation.mutate({ id: editItem.id, body: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
 
   const columns = [
     { key: "code", header: "Kode" },
@@ -85,6 +140,28 @@ export default function ProgramsPage() {
       header: "Tanggal Mulai",
       render: (item: Program) =>
         item.start_date ? formatDate(item.start_date) : "-",
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (item: Program) => (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); openEdit(item); }}
+            className="rounded p-1 hover:bg-gray-100"
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4 text-gray-500" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }}
+            className="rounded p-1 hover:bg-gray-100"
+            title="Hapus"
+          >
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -137,21 +214,12 @@ export default function ProgramsPage() {
       />
 
       <Modal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        title="Tambah Program Baru"
+        open={showCreate || !!editItem}
+        onClose={() => { setShowCreate(false); setEditItem(null); resetForm(); }}
+        title={editItem ? "Edit Program" : "Tambah Program Baru"}
         size="lg"
       >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate({
-              ...form,
-              budget: form.budget ? Number(form.budget) : undefined,
-            });
-          }}
-          className="space-y-4"
-        >
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1.5 block text-sm font-medium">Kode</label>
@@ -219,16 +287,32 @@ export default function ProgramsPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowCreate(false)}
+              onClick={() => { setShowCreate(false); setEditItem(null); resetForm(); }}
             >
               Batal
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Menyimpan..." : "Simpan"}
+            <Button
+              type="submit"
+              disabled={editItem ? updateMutation.isPending : createMutation.isPending}
+            >
+              {(editItem ? updateMutation.isPending : createMutation.isPending)
+                ? "Menyimpan..."
+                : "Simpan"}
             </Button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        title="Hapus Program"
+        message={`Program "${deleteTarget?.name}" akan dihapus.`}
+        confirmLabel="Hapus"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

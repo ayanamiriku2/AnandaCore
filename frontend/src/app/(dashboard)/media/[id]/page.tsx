@@ -40,15 +40,13 @@ export default function MediaAlbumDetailPage() {
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [editForm, setEditForm] = useState({ title: "", description: "" });
 
-  const { data: album, isLoading } = useQuery<MediaAlbum>({
+  const { data: albumData, isLoading } = useQuery<{ album: MediaAlbum; assets: MediaAsset[] }>({
     queryKey: ["media-album", id],
     queryFn: () => api.get(`/media/albums/${id}`).then((r) => r.data),
   });
 
-  const { data: assets } = useQuery<MediaAsset[]>({
-    queryKey: ["media-assets", id],
-    queryFn: () => api.get(`/media/albums/${id}/assets`).then((r) => r.data),
-  });
+  const album = albumData?.album;
+  const assets = albumData?.assets;
 
   const uploadMutation = useMutation({
     mutationFn: async (fileList: File[]) => {
@@ -61,7 +59,6 @@ export default function MediaAlbumDetailPage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["media-assets", id] });
       queryClient.invalidateQueries({ queryKey: ["media-album", id] });
       setShowUpload(false);
       setPendingFiles([]);
@@ -101,7 +98,6 @@ export default function MediaAlbumDetailPage() {
   const deleteAssetMutation = useMutation({
     mutationFn: (assetId: string) => api.delete(`/media/assets/${assetId}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["media-assets", id] });
       queryClient.invalidateQueries({ queryKey: ["media-album", id] });
       setShowDeleteAsset(null);
       toast.success("Media berhasil dihapus");

@@ -41,3 +41,19 @@ pub async fn create_announcement(pool: &PgPool, req: CreateAnnouncementRequest, 
     .fetch_one(pool).await?;
     Ok(a)
 }
+
+pub async fn update_memo(pool: &PgPool, id: Uuid, req: UpdateMemoRequest) -> Result<Memo, AppError> {
+    sqlx::query_as::<_, Memo>(
+        "UPDATE memos SET title = COALESCE($2, title), content = COALESCE($3, content), priority = COALESCE($4, priority), updated_at = NOW() WHERE id = $1 RETURNING *"
+    )
+    .bind(id).bind(&req.title).bind(&req.content).bind(&req.priority)
+    .fetch_one(pool).await.map_err(AppError::from)
+}
+
+pub async fn delete_memo(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    sqlx::query("UPDATE memos SET deleted_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

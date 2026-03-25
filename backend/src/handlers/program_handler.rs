@@ -19,3 +19,11 @@ pub async fn create(State(state): State<Arc<AppState>>, axum::Extension(current)
 pub async fn update(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>, Json(req): Json<UpdateProgramRequest>) -> Result<Json<Program>, AppError> {
     Ok(Json(program_service::update_program(&state.db, id, req).await?))
 }
+
+pub async fn delete(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    program_service::delete_program(&state.db, id).await?;
+    Ok(Json(serde_json::json!({"message": "Program berhasil dihapus"})))
+}

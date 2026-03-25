@@ -55,3 +55,11 @@ pub async fn update_program(pool: &PgPool, id: Uuid, req: UpdateProgramRequest) 
     .bind(id).bind(&req.name).bind(&req.description).bind(&req.status)
     .fetch_one(pool).await.map_err(AppError::from)
 }
+
+pub async fn delete_program(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    sqlx::query("UPDATE programs SET deleted_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

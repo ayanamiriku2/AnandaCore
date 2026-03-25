@@ -46,11 +46,11 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Programs
         .route("/programs", get(program_handler::list).post(program_handler::create))
-        .route("/programs/:id", get(program_handler::get).put(program_handler::update))
+        .route("/programs/:id", get(program_handler::get).put(program_handler::update).delete(program_handler::delete))
 
         // Activities
         .route("/activities", get(activity_handler::list).post(activity_handler::create))
-        .route("/activities/:id", get(activity_handler::get).put(activity_handler::update))
+        .route("/activities/:id", get(activity_handler::get).put(activity_handler::update).delete(activity_handler::delete))
 
         // Partners
         .route("/partners", get(partner_handler::list).post(partner_handler::create))
@@ -63,16 +63,16 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Beneficiaries
         .route("/beneficiaries", get(beneficiary_handler::list).post(beneficiary_handler::create))
-        .route("/beneficiaries/:id", get(beneficiary_handler::get).put(beneficiary_handler::update))
+        .route("/beneficiaries/:id", get(beneficiary_handler::get).put(beneficiary_handler::update).delete(beneficiary_handler::delete))
 
         // Tasks
         .route("/tasks", get(task_handler::list).post(task_handler::create))
-        .route("/tasks/:id", get(task_handler::get).put(task_handler::update))
+        .route("/tasks/:id", get(task_handler::get).put(task_handler::update).delete(task_handler::delete))
         .route("/tasks/:id/comments", post(task_handler::add_comment))
 
         // Assets
         .route("/assets", get(asset_handler::list).post(asset_handler::create))
-        .route("/assets/:id", get(asset_handler::get).put(asset_handler::update))
+        .route("/assets/:id", get(asset_handler::get).put(asset_handler::update).delete(asset_handler::delete))
 
         // Media
         .route("/media/albums", get(media_handler::list_albums).post(media_handler::create_album))
@@ -84,6 +84,7 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Memos & Announcements
         .route("/memos", get(memo_handler::list_memos).post(memo_handler::create_memo))
+        .route("/memos/:id", put(memo_handler::update_memo).delete(memo_handler::delete_memo))
         .route("/announcements", get(memo_handler::list_announcements).post(memo_handler::create_announcement))
 
         // Notifications

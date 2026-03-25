@@ -66,3 +66,11 @@ pub async fn update_activity(pool: &PgPool, id: Uuid, req: UpdateActivityRequest
     .bind(&req.notes)
     .fetch_one(pool).await.map_err(AppError::from)
 }
+
+pub async fn delete_activity(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    sqlx::query("UPDATE activities SET deleted_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

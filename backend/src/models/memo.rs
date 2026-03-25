@@ -28,6 +28,13 @@ pub struct CreateMemoRequest {
     pub recipient_user_ids: Option<Vec<Uuid>>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct UpdateMemoRequest {
+    pub title: Option<String>,
+    pub content: Option<String>,
+    pub priority: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, FromRow)]
 pub struct Announcement {
     pub id: Uuid,

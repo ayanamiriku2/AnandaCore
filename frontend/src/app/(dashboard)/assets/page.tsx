@@ -10,9 +10,10 @@ import { Select } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePagination } from "@/hooks/use-pagination";
 import { formatDate, formatCurrency, statusColor } from "@/lib/utils";
-import { Plus, Search } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Asset, PaginatedResponse } from "@/types";
 
@@ -21,6 +22,8 @@ export default function AssetsPage() {
   const pagination = usePagination();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editItem, setEditItem] = useState<Asset | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
   const [form, setForm] = useState({
     asset_code: "",
     name: "",
@@ -29,6 +32,21 @@ export default function AssetsPage() {
     acquisition_date: "",
     acquisition_value: "",
   });
+
+  const resetForm = () =>
+    setForm({ asset_code: "", name: "", description: "", condition: "good", acquisition_date: "", acquisition_value: "" });
+
+  const openEdit = (item: Asset) => {
+    setForm({
+      asset_code: item.asset_code || "",
+      name: item.name || "",
+      description: item.description || "",
+      condition: item.condition || "good",
+      acquisition_date: item.acquisition_date || "",
+      acquisition_value: item.acquisition_value ? String(item.acquisition_value) : "",
+    });
+    setEditItem(item);
+  };
 
   const { data, isLoading } = useQuery<PaginatedResponse<Asset>>({
     queryKey: ["assets", pagination.page, pagination.per_page, search],
@@ -49,10 +67,46 @@ export default function AssetsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["assets"] });
       setShowCreate(false);
+      resetForm();
       toast.success("Aset berhasil ditambahkan");
     },
     onError: () => toast.error("Gagal menambahkan aset"),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: string; body: Record<string, unknown> }) =>
+      api.put(`/assets/${data.id}`, data.body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      setEditItem(null);
+      resetForm();
+      toast.success("Aset berhasil diperbarui");
+    },
+    onError: () => toast.error("Gagal memperbarui aset"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/assets/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["assets"] });
+      setDeleteTarget(null);
+      toast.success("Aset berhasil dihapus");
+    },
+    onError: () => toast.error("Gagal menghapus aset"),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload = {
+      ...form,
+      acquisition_value: form.acquisition_value ? Number(form.acquisition_value) : undefined,
+    };
+    if (editItem) {
+      updateMutation.mutate({ id: editItem.id, body: payload });
+    } else {
+      createMutation.mutate(payload);
+    }
+  };
 
   const conditionBadge = (c: string) => {
     const map: Record<string, "success" | "warning" | "danger" | "info" | "default"> = {
@@ -98,6 +152,28 @@ export default function AssetsPage() {
         </span>
       ),
     },
+    {
+      key: "actions",
+      header: "",
+      render: (item: Asset) => (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); openEdit(item); }}
+            className="rounded p-1 hover:bg-gray-100"
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4 text-gray-500" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }}
+            className="rounded p-1 hover:bg-gray-100"
+            title="Hapus"
+          >
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </button>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -138,21 +214,13 @@ export default function AssetsPage() {
       />
 
       <Modal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        title="Tambah Aset Baru"
+        open={showCreate || !!editItem}
+        onClose={() => { setShowCreate(false); setEditItem(null); resetForm(); }}
+        title={editItem ? "Edit Aset" : "Tambah Aset Baru"}
         size="lg"
       >
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate({
-              ...form,
-              acquisition_value: form.acquisition_value
-                ? Number(form.acquisition_value)
-                : undefined,
-            });
-          }}
+          onSubmit={handleSubmit}
           className="space-y-4"
         >
           <div className="grid grid-cols-2 gap-4">
@@ -236,16 +304,27 @@ export default function AssetsPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowCreate(false)}
+              onClick={() => { setShowCreate(false); setEditItem(null); resetForm(); }}
             >
               Batal
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Menyimpan..." : "Simpan"}
+            <Button type="submit" disabled={editItem ? updateMutation.isPending : createMutation.isPending}>
+              {(editItem ? updateMutation.isPending : createMutation.isPending) ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        title="Hapus Aset"
+        message={`Aset "${deleteTarget?.name}" akan dihapus.`}
+        confirmLabel="Hapus"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

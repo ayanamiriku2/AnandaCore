@@ -60,3 +60,11 @@ pub async fn add_comment(pool: &PgPool, task_id: Uuid, user_id: Uuid, content: &
     ).bind(task_id).bind(user_id).bind(content).fetch_one(pool).await?;
     Ok(comment)
 }
+
+pub async fn delete_task(pool: &PgPool, id: Uuid) -> Result<(), AppError> {
+    sqlx::query("UPDATE tasks SET deleted_at = NOW() WHERE id = $1")
+        .bind(id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

@@ -20,6 +20,14 @@ pub async fn update(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>, Js
     Ok(Json(task_service::update_task(&state.db, id, req).await?))
 }
 
+pub async fn delete(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    task_service::delete_task(&state.db, id).await?;
+    Ok(Json(serde_json::json!({"message": "Tugas berhasil dihapus"})))
+}
+
 pub async fn add_comment(
     State(state): State<Arc<AppState>>,
     axum::Extension(current): axum::Extension<CurrentUser>,

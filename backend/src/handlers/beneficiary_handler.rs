@@ -19,3 +19,11 @@ pub async fn create(State(state): State<Arc<AppState>>, axum::Extension(current)
 pub async fn update(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>, Json(req): Json<UpdateBeneficiaryRequest>) -> Result<Json<Beneficiary>, AppError> {
     Ok(Json(beneficiary_service::update_beneficiary(&state.db, id, req).await?))
 }
+
+pub async fn delete(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    beneficiary_service::delete_beneficiary(&state.db, id).await?;
+    Ok(Json(serde_json::json!({"message": "Penerima manfaat berhasil dihapus"})))
+}

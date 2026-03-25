@@ -9,9 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePagination } from "@/hooks/use-pagination";
 import { formatDate, statusColor } from "@/lib/utils";
-import { Plus, Search } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Activity, PaginatedResponse } from "@/types";
 
@@ -20,6 +21,8 @@ export default function ActivitiesPage() {
   const pagination = usePagination();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editItem, setEditItem] = useState<Activity | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Activity | null>(null);
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -28,6 +31,21 @@ export default function ActivitiesPage() {
     end_date: "",
     location: "",
   });
+
+  const resetForm = () =>
+    setForm({ name: "", description: "", status: "planned", start_date: "", end_date: "", location: "" });
+
+  const openEdit = (item: Activity) => {
+    setForm({
+      name: item.name,
+      description: item.description || "",
+      status: item.status || "planned",
+      start_date: item.start_date || "",
+      end_date: item.end_date || "",
+      location: item.location || "",
+    });
+    setEditItem(item);
+  };
 
   const { data, isLoading } = useQuery<PaginatedResponse<Activity>>({
     queryKey: ["activities", pagination.page, pagination.per_page, search],
@@ -48,10 +66,42 @@ export default function ActivitiesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["activities"] });
       setShowCreate(false);
+      resetForm();
       toast.success("Kegiatan berhasil dibuat");
     },
     onError: () => toast.error("Gagal membuat kegiatan"),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: string; body: typeof form }) =>
+      api.put(`/activities/${data.id}`, data.body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activities"] });
+      setEditItem(null);
+      resetForm();
+      toast.success("Kegiatan berhasil diperbarui");
+    },
+    onError: () => toast.error("Gagal memperbarui kegiatan"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/activities/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["activities"] });
+      setDeleteTarget(null);
+      toast.success("Kegiatan berhasil dihapus");
+    },
+    onError: () => toast.error("Gagal menghapus kegiatan"),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editItem) {
+      updateMutation.mutate({ id: editItem.id, body: form });
+    } else {
+      createMutation.mutate(form);
+    }
+  };
 
   const columns = [
     {
@@ -81,6 +131,28 @@ export default function ActivitiesPage() {
       header: "Tanggal",
       render: (item: Activity) =>
         item.start_date ? formatDate(item.start_date) : "-",
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (item: Activity) => (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); openEdit(item); }}
+            className="rounded p-1 hover:bg-gray-100"
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4 text-gray-500" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }}
+            className="rounded p-1 hover:bg-gray-100"
+            title="Hapus"
+          >
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -122,16 +194,13 @@ export default function ActivitiesPage() {
       />
 
       <Modal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        title="Tambah Kegiatan Baru"
+        open={showCreate || !!editItem}
+        onClose={() => { setShowCreate(false); setEditItem(null); resetForm(); }}
+        title={editItem ? "Edit Kegiatan" : "Tambah Kegiatan Baru"}
         size="lg"
       >
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate(form);
-          }}
+          onSubmit={handleSubmit}
           className="space-y-4"
         >
           <div>
@@ -190,16 +259,27 @@ export default function ActivitiesPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowCreate(false)}
+              onClick={() => { setShowCreate(false); setEditItem(null); resetForm(); }}
             >
               Batal
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Menyimpan..." : "Simpan"}
+            <Button type="submit" disabled={editItem ? updateMutation.isPending : createMutation.isPending}>
+              {(editItem ? updateMutation.isPending : createMutation.isPending) ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        title="Hapus Kegiatan"
+        message={`Kegiatan "${deleteTarget?.name}" akan dihapus.`}
+        confirmLabel="Hapus"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }

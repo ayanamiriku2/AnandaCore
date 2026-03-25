@@ -19,3 +19,11 @@ pub async fn create(State(state): State<Arc<AppState>>, axum::Extension(current)
 pub async fn update(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>, Json(req): Json<UpdateAssetRequest>) -> Result<Json<Asset>, AppError> {
     Ok(Json(asset_service::update_asset(&state.db, id, req).await?))
 }
+
+pub async fn delete(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    asset_service::delete_asset(&state.db, id).await?;
+    Ok(Json(serde_json::json!({"message": "Aset berhasil dihapus"})))
+}

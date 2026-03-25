@@ -1,19 +1,66 @@
 "use client";
 
-import { Bell, Search, LogOut, User } from "lucide-react";
+import { Bell, Search, LogOut, User, Check } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
-import { getInitials } from "@/lib/utils";
+import { getInitials, formatDate } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import api from "@/lib/api";
+
+interface Notification {
+  id: string;
+  title: string;
+  message?: string;
+  notification_type?: string;
+  is_read: boolean;
+  created_at: string;
+}
 
 export function Header() {
   const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
   const [showProfile, setShowProfile] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const profileRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
+
+  const { data: notifications } = useQuery<Notification[]>({
+    queryKey: ["notifications"],
+    queryFn: () => api.get("/notifications").then((r) => r.data?.data ?? r.data ?? []),
+    refetchInterval: 30000,
+  });
+
+  const { data: unreadData } = useQuery<{ count: number }>({
+    queryKey: ["notifications-unread"],
+    queryFn: () => api.get("/notifications/unread-count").then((r) => r.data),
+    refetchInterval: 30000,
+  });
+
+  const markAllRead = useMutation({
+    mutationFn: () => api.post("/notifications/mark-all-read"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+    },
+  });
+
+  const markRead = useMutation({
+    mutationFn: (id: string) => api.post(`/notifications/${id}/read`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications-unread"] });
+    },
+  });
+
+  const unreadCount = unreadData?.count ?? 0;
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setShowProfile(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setShowNotifications(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -34,16 +81,78 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="relative rounded-md p-2 hover:bg-gray-100">
-          <Bell className="h-5 w-5 text-gray-600" />
-          <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-            3
-          </span>
-        </button>
+        <div className="relative" ref={notifRef}>
+          <button
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              setShowProfile(false);
+            }}
+            className="relative rounded-md p-2 hover:bg-gray-100"
+          >
+            <Bell className="h-5 w-5 text-gray-600" />
+            {unreadCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {showNotifications && (
+            <div className="absolute right-0 top-12 w-80 rounded-md border bg-white shadow-lg">
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <h3 className="text-sm font-semibold">Notifikasi</h3>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => markAllRead.mutate()}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    <Check className="h-3 w-3" />
+                    Tandai semua dibaca
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {notifications && notifications.length > 0 ? (
+                  notifications.slice(0, 10).map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => {
+                        if (!n.is_read) markRead.mutate(n.id);
+                      }}
+                      className={`block w-full border-b px-4 py-3 text-left transition-colors last:border-0 hover:bg-gray-50 ${
+                        !n.is_read ? "bg-blue-50/50" : ""
+                      }`}
+                    >
+                      <div className="flex items-start gap-2">
+                        {!n.is_read && (
+                          <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-500" />
+                        )}
+                        <div className={!n.is_read ? "" : "ml-4"}>
+                          <p className="text-sm font-medium leading-snug">{n.title}</p>
+                          {n.message && (
+                            <p className="mt-0.5 text-xs text-gray-500 line-clamp-2">{n.message}</p>
+                          )}
+                          <p className="mt-1 text-xs text-gray-400">{formatDate(n.created_at)}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="py-8 text-center text-sm text-gray-500">
+                    Belum ada notifikasi
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="relative" ref={profileRef}>
           <button
-            onClick={() => setShowProfile(!showProfile)}
+            onClick={() => {
+              setShowProfile(!showProfile);
+              setShowNotifications(false);
+            }}
             className="flex items-center gap-2 rounded-md p-1.5 hover:bg-gray-100"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-xs font-medium text-white">

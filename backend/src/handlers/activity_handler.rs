@@ -19,3 +19,11 @@ pub async fn create(State(state): State<Arc<AppState>>, axum::Extension(current)
 pub async fn update(State(state): State<Arc<AppState>>, Path(id): Path<Uuid>, Json(req): Json<UpdateActivityRequest>) -> Result<Json<Activity>, AppError> {
     Ok(Json(activity_service::update_activity(&state.db, id, req).await?))
 }
+
+pub async fn delete(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    activity_service::delete_activity(&state.db, id).await?;
+    Ok(Json(serde_json::json!({"message": "Kegiatan berhasil dihapus"})))
+}

@@ -10,9 +10,10 @@ import { Select } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { usePagination } from "@/hooks/use-pagination";
 import { formatDate } from "@/lib/utils";
-import { Plus, Search } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Memo, PaginatedResponse } from "@/types";
 
@@ -21,11 +22,25 @@ export default function MemosPage() {
   const pagination = usePagination();
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editItem, setEditItem] = useState<Memo | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Memo | null>(null);
   const [form, setForm] = useState({
     title: "",
     content: "",
     priority: "normal",
   });
+
+  const resetForm = () =>
+    setForm({ title: "", content: "", priority: "normal" });
+
+  const openEdit = (item: Memo) => {
+    setForm({
+      title: item.title || "",
+      content: item.content || "",
+      priority: item.priority || "normal",
+    });
+    setEditItem(item);
+  };
 
   const { data, isLoading } = useQuery<PaginatedResponse<Memo>>({
     queryKey: ["memos", pagination.page, pagination.per_page, search],
@@ -46,10 +61,42 @@ export default function MemosPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["memos"] });
       setShowCreate(false);
+      resetForm();
       toast.success("Memo berhasil dibuat");
     },
     onError: () => toast.error("Gagal membuat memo"),
   });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { id: string; body: typeof form }) =>
+      api.put(`/memos/${data.id}`, data.body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["memos"] });
+      setEditItem(null);
+      resetForm();
+      toast.success("Memo berhasil diperbarui");
+    },
+    onError: () => toast.error("Gagal memperbarui memo"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/memos/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["memos"] });
+      setDeleteTarget(null);
+      toast.success("Memo berhasil dihapus");
+    },
+    onError: () => toast.error("Gagal menghapus memo"),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editItem) {
+      updateMutation.mutate({ id: editItem.id, body: form });
+    } else {
+      createMutation.mutate(form);
+    }
+  };
 
   const columns = [
     {
@@ -83,6 +130,28 @@ export default function MemosPage() {
       key: "created_at",
       header: "Tanggal",
       render: (item: Memo) => formatDate(item.created_at),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (item: Memo) => (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => { e.stopPropagation(); openEdit(item); }}
+            className="rounded p-1 hover:bg-gray-100"
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4 text-gray-500" />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); setDeleteTarget(item); }}
+            className="rounded p-1 hover:bg-gray-100"
+            title="Hapus"
+          >
+            <Trash2 className="h-4 w-4 text-red-500" />
+          </button>
+        </div>
+      ),
     },
   ];
 
@@ -124,16 +193,13 @@ export default function MemosPage() {
       />
 
       <Modal
-        open={showCreate}
-        onClose={() => setShowCreate(false)}
-        title="Buat Memo Baru"
+        open={showCreate || !!editItem}
+        onClose={() => { setShowCreate(false); setEditItem(null); resetForm(); }}
+        title={editItem ? "Edit Memo" : "Buat Memo Baru"}
         size="lg"
       >
         <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            createMutation.mutate(form);
-          }}
+          onSubmit={handleSubmit}
           className="space-y-4"
         >
           <div>
@@ -159,16 +225,27 @@ export default function MemosPage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => setShowCreate(false)}
+              onClick={() => { setShowCreate(false); setEditItem(null); resetForm(); }}
             >
               Batal
             </Button>
-            <Button type="submit" disabled={createMutation.isPending}>
-              {createMutation.isPending ? "Menyimpan..." : "Simpan"}
+            <Button type="submit" disabled={editItem ? updateMutation.isPending : createMutation.isPending}>
+              {(editItem ? updateMutation.isPending : createMutation.isPending) ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        title="Hapus Memo"
+        message={`Memo "${deleteTarget?.title}" akan dihapus.`}
+        confirmLabel="Hapus"
+        variant="danger"
+        loading={deleteMutation.isPending}
+      />
     </div>
   );
 }
