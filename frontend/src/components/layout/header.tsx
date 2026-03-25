@@ -4,6 +4,7 @@ import { Bell, Search, LogOut, User, Check } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { getInitials, formatDate } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
 
@@ -18,6 +19,7 @@ interface Notification {
 
 export function Header() {
   const { user, logout } = useAuth();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [showProfile, setShowProfile] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -168,7 +170,10 @@ export function Header() {
 
           {showProfile && (
             <div className="absolute right-0 top-12 w-48 rounded-md border bg-white py-1 shadow-lg">
-              <button className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+              <button
+                onClick={() => { setShowProfile(false); router.push("/profile"); }}
+                className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
                 <User className="h-4 w-4" />
                 Profil Saya
               </button>
