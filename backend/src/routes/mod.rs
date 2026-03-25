@@ -23,64 +23,64 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Users
         .route("/users", get(user_handler::list).post(user_handler::create))
-        .route("/users/{id}", get(user_handler::get).put(user_handler::update).delete(user_handler::delete))
-        .route("/users/{id}/roles", put(user_handler::assign_roles))
+        .route("/users/:id", get(user_handler::get).put(user_handler::update).delete(user_handler::delete))
+        .route("/users/:id/roles", put(user_handler::assign_roles))
 
         // Documents
         .route("/documents", get(document_handler::list).post(document_handler::create))
-        .route("/documents/{id}", get(document_handler::get).put(document_handler::update).delete(document_handler::soft_delete))
-        .route("/documents/{id}/upload", post(document_handler::upload_file))
-        .route("/documents/{id}/download", get(document_handler::download_file))
-        .route("/documents/{id}/verify", post(document_handler::verify))
-        .route("/documents/{id}/versions", get(document_handler::versions))
-        .route("/documents/{id}/restore", post(document_handler::restore))
+        .route("/documents/:id", get(document_handler::get).put(document_handler::update).delete(document_handler::soft_delete))
+        .route("/documents/:id/upload", post(document_handler::upload_file))
+        .route("/documents/:id/download", get(document_handler::download_file))
+        .route("/documents/:id/verify", post(document_handler::verify))
+        .route("/documents/:id/versions", get(document_handler::versions))
+        .route("/documents/:id/restore", post(document_handler::restore))
         .route("/documents/categories", get(document_handler::categories))
 
         // Letters
         .route("/letters", get(letter_handler::list).post(letter_handler::create))
-        .route("/letters/{id}", get(letter_handler::get).put(letter_handler::update).delete(letter_handler::soft_delete))
-        .route("/letters/{id}/dispositions", get(letter_handler::get_dispositions).post(letter_handler::create_disposition))
-        .route("/letters/{id}/attachments", get(letter_handler::get_attachments).post(letter_handler::upload_attachment))
-        .route("/letters/{id}/restore", post(letter_handler::restore))
-        .route("/letters/attachments/{attachment_id}/download", get(letter_handler::download_attachment))
+        .route("/letters/:id", get(letter_handler::get).put(letter_handler::update).delete(letter_handler::soft_delete))
+        .route("/letters/:id/dispositions", get(letter_handler::get_dispositions).post(letter_handler::create_disposition))
+        .route("/letters/:id/attachments", get(letter_handler::get_attachments).post(letter_handler::upload_attachment))
+        .route("/letters/:id/restore", post(letter_handler::restore))
+        .route("/letters/attachments/:attachment_id/download", get(letter_handler::download_attachment))
 
         // Programs
         .route("/programs", get(program_handler::list).post(program_handler::create))
-        .route("/programs/{id}", get(program_handler::get).put(program_handler::update))
+        .route("/programs/:id", get(program_handler::get).put(program_handler::update))
 
         // Activities
         .route("/activities", get(activity_handler::list).post(activity_handler::create))
-        .route("/activities/{id}", get(activity_handler::get).put(activity_handler::update))
+        .route("/activities/:id", get(activity_handler::get).put(activity_handler::update))
 
         // Partners
         .route("/partners", get(partner_handler::list).post(partner_handler::create))
-        .route("/partners/{id}", get(partner_handler::get).put(partner_handler::update).delete(partner_handler::soft_delete))
-        .route("/partners/{id}/contacts", get(partner_handler::contacts).post(partner_handler::create_contact))
-        .route("/partners/{id}/agreements", get(partner_handler::agreements).post(partner_handler::create_agreement))
-        .route("/partners/{id}/agreements/{agreement_id}/upload", post(partner_handler::upload_agreement_file))
-        .route("/partners/{id}/interactions", get(partner_handler::interactions).post(partner_handler::create_interaction))
-        .route("/partners/{id}/restore", post(partner_handler::restore))
+        .route("/partners/:id", get(partner_handler::get).put(partner_handler::update).delete(partner_handler::soft_delete))
+        .route("/partners/:id/contacts", get(partner_handler::contacts).post(partner_handler::create_contact))
+        .route("/partners/:id/agreements", get(partner_handler::agreements).post(partner_handler::create_agreement))
+        .route("/partners/:id/agreements/:agreement_id/upload", post(partner_handler::upload_agreement_file))
+        .route("/partners/:id/interactions", get(partner_handler::interactions).post(partner_handler::create_interaction))
+        .route("/partners/:id/restore", post(partner_handler::restore))
 
         // Beneficiaries
         .route("/beneficiaries", get(beneficiary_handler::list).post(beneficiary_handler::create))
-        .route("/beneficiaries/{id}", get(beneficiary_handler::get).put(beneficiary_handler::update))
+        .route("/beneficiaries/:id", get(beneficiary_handler::get).put(beneficiary_handler::update))
 
         // Tasks
         .route("/tasks", get(task_handler::list).post(task_handler::create))
-        .route("/tasks/{id}", get(task_handler::get).put(task_handler::update))
-        .route("/tasks/{id}/comments", post(task_handler::add_comment))
+        .route("/tasks/:id", get(task_handler::get).put(task_handler::update))
+        .route("/tasks/:id/comments", post(task_handler::add_comment))
 
         // Assets
         .route("/assets", get(asset_handler::list).post(asset_handler::create))
-        .route("/assets/{id}", get(asset_handler::get).put(asset_handler::update))
+        .route("/assets/:id", get(asset_handler::get).put(asset_handler::update))
 
         // Media
         .route("/media/albums", get(media_handler::list_albums).post(media_handler::create_album))
-        .route("/media/albums/{id}", get(media_handler::get_album).put(media_handler::update_album).delete(media_handler::soft_delete_album))
-        .route("/media/albums/{id}/upload", post(media_handler::upload_asset))
-        .route("/media/albums/{id}/restore", post(media_handler::restore_album))
+        .route("/media/albums/:id", get(media_handler::get_album).put(media_handler::update_album).delete(media_handler::soft_delete_album))
+        .route("/media/albums/:id/upload", post(media_handler::upload_asset))
+        .route("/media/albums/:id/restore", post(media_handler::restore_album))
         .route("/media/assets", get(media_handler::list_assets))
-        .route("/media/assets/{id}", delete(media_handler::delete_asset))
+        .route("/media/assets/:id", delete(media_handler::delete_asset))
 
         // Memos & Announcements
         .route("/memos", get(memo_handler::list_memos).post(memo_handler::create_memo))
@@ -90,7 +90,7 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
         .route("/notifications", get(notification_handler::list))
         .route("/notifications/unread-count", get(notification_handler::unread_count))
         .route("/notifications/mark-all-read", post(notification_handler::mark_all_read))
-        .route("/notifications/{id}/read", post(notification_handler::mark_read))
+        .route("/notifications/:id/read", post(notification_handler::mark_read))
 
         // Audit & Backup
         .route("/audit-logs", get(audit_handler::list))
@@ -108,7 +108,7 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Master Data
         .route("/master/departments", get(master_data_handler::list_departments).post(master_data_handler::create_department))
-        .route("/master/departments/{id}", put(master_data_handler::update_department))
+        .route("/master/departments/:id", put(master_data_handler::update_department))
         .route("/master/roles", get(master_data_handler::list_roles).post(master_data_handler::create_role))
         .route("/master/permissions", get(master_data_handler::list_permissions))
         .route("/master/tags", get(master_data_handler::list_tags))
@@ -120,7 +120,7 @@ pub fn api_routes(state: Arc<AppState>) -> Router {
 
         // Settings
         .route("/settings", get(settings_handler::list))
-        .route("/settings/{key}", put(settings_handler::update))
+        .route("/settings/:key", put(settings_handler::update))
 
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
