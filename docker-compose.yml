@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: anandacore-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-anandacore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-anandacore_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-anandacore}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-anandacore}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: anandacore-s3
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-anandacore}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-anandacore_secret}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - s3data:/data
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: anandacore-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-anandacore}:${POSTGRES_PASSWORD:-anandacore_secret}@postgres:5432/${POSTGRES_DB:-anandacore}
+      RUST_LOG: ${RUST_LOG:-info,anandacore=debug}
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production_32_char_min}
+      JWT_EXPIRY_HOURS: ${JWT_EXPIRY_HOURS:-24}
+      REFRESH_TOKEN_EXPIRY_DAYS: ${REFRESH_TOKEN_EXPIRY_DAYS:-30}
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-anandacore}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-anandacore_secret}
+      S3_BUCKET: ${S3_BUCKET:-anandacore-files}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      APP_HOST: ${APP_HOST:-0.0.0.0}
+      APP_PORT: ${APP_PORT:-8080}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000}
+    ports:
+      - "${APP_PORT:-8080}:8080"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: anandacore-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
+volumes:
+  pgdata:
+  s3data:
