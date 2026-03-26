@@ -2,27 +2,48 @@ use sqlx::PgPool;
 use uuid::Uuid;
 use crate::{db::*, errors::AppError, models::*};
 
-pub async fn list_albums(pool: &PgPool, pagination: &PaginationParams) -> Result<PaginatedResponse<MediaAlbum>, AppError> {
-    let total: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media_albums WHERE deleted_at IS NULL")
-        .fetch_one(pool).await.unwrap_or(0);
+pub async fn list_albums(pool: &PgPool, pagination: &PaginationParams, parent_id: Option<Uuid>) -> Result<PaginatedResponse<MediaAlbum>, AppError> {
+    let total: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM media_albums WHERE deleted_at IS NULL \
+         AND ($1::uuid IS NULL AND parent_album_id IS NULL OR parent_album_id = $1)"
+    ).bind(parent_id).fetch_one(pool).await.unwrap_or(0);
     let data = sqlx::query_as::<_, MediaAlbum>(
         "SELECT a.*, \
-         (SELECT COUNT(*) FROM media_assets ma WHERE ma.album_id = a.id AND ma.deleted_at IS NULL) AS asset_count \
-         FROM media_albums a WHERE a.deleted_at IS NULL ORDER BY a.created_at DESC LIMIT $1 OFFSET $2"
-    ).bind(pagination.per_page()).bind(pagination.offset()).fetch_all(pool).await?;
+         (SELECT COUNT(*) FROM media_assets ma WHERE ma.album_id = a.id AND ma.deleted_at IS NULL) AS asset_count, \
+         (SELECT COUNT(*) FROM media_albums sa WHERE sa.parent_album_id = a.id AND sa.deleted_at IS NULL) AS sub_album_count \
+         FROM media_albums a WHERE a.deleted_at IS NULL \
+         AND ($1::uuid IS NULL AND a.parent_album_id IS NULL OR a.parent_album_id = $1) \
+         ORDER BY a.created_at DESC LIMIT $2 OFFSET $3"
+    ).bind(parent_id).bind(pagination.per_page()).bind(pagination.offset()).fetch_all(pool).await?;
     Ok(PaginatedResponse::new(data, total, pagination))
 }
 
 pub async fn get_album(pool: &PgPool, id: Uuid) -> Result<MediaAlbum, AppError> {
-    sqlx::query_as::<_, MediaAlbum>("SELECT * FROM media_albums WHERE id = $1 AND deleted_at IS NULL")
-        .bind(id).fetch_optional(pool).await?
+    sqlx::query_as::<_, MediaAlbum>(
+        "SELECT a.*, \
+         (SELECT COUNT(*) FROM media_assets ma WHERE ma.album_id = a.id AND ma.deleted_at IS NULL) AS asset_count, \
+         (SELECT COUNT(*) FROM media_albums sa WHERE sa.parent_album_id = a.id AND sa.deleted_at IS NULL) AS sub_album_count \
+         FROM media_albums a WHERE a.id = $1 AND a.deleted_at IS NULL"
+    ).bind(id).fetch_optional(pool).await?
         .ok_or_else(|| AppError::NotFound("Album tidak ditemukan".into()))
+}
+
+pub async fn get_album_breadcrumbs(pool: &PgPool, id: Uuid) -> Result<Vec<MediaAlbum>, AppError> {
+    let crumbs = sqlx::query_as::<_, MediaAlbum>(
+        "WITH RECURSIVE ancestors AS (\
+         SELECT a.*, 0 AS depth FROM media_albums a WHERE a.id = $1 AND a.deleted_at IS NULL \
+         UNION ALL \
+         SELECT p.*, anc.depth + 1 FROM media_albums p JOIN ancestors anc ON p.id = anc.parent_album_id WHERE p.deleted_at IS NULL\
+         ) SELECT a.*, 0::bigint AS asset_count, 0::bigint AS sub_album_count FROM ancestors a ORDER BY depth DESC"
+    ).bind(id).fetch_all(pool).await?;
+    Ok(crumbs)
 }
 
 pub async fn create_album(pool: &PgPool, req: CreateAlbumRequest, user_id: Uuid) -> Result<MediaAlbum, AppError> {
     let album = sqlx::query_as::<_, MediaAlbum>(
-        "INSERT INTO media_albums (title, description, activity_id, program_id, album_date, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *"
-    ).bind(&req.title).bind(&req.description).bind(req.activity_id).bind(req.program_id).bind(req.album_date).bind(user_id)
+        "INSERT INTO media_albums (title, description, activity_id, program_id, album_date, created_by, parent_album_id) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *, 0::bigint AS asset_count, 0::bigint AS sub_album_count"
+    ).bind(&req.title).bind(&req.description).bind(req.activity_id).bind(req.program_id).bind(req.album_date).bind(user_id).bind(req.parent_album_id)
     .fetch_one(pool).await?;
     Ok(album)
 }

@@ -316,7 +316,9 @@ export interface MediaAlbum {
   created_by?: string;
   created_at: string;
   updated_at: string;
+  parent_album_id?: string;
   asset_count?: number;
+  sub_album_count?: number;
 }
 
 export interface MediaAsset {

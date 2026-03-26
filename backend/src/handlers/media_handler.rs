@@ -22,8 +22,9 @@ use crate::{
 pub async fn list_albums(
     State(state): State<Arc<AppState>>,
     Query(params): Query<PaginationParams>,
+    Query(filter): Query<AlbumListFilter>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let resp = media_service::list_albums(&state.db, &params).await?;
+    let resp = media_service::list_albums(&state.db, &params, filter.parent_id).await?;
     Ok(Json(serde_json::to_value(resp).unwrap()))
 }
 
@@ -33,7 +34,9 @@ pub async fn get_album(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let album = media_service::get_album(&state.db, id).await?;
     let assets = media_service::get_album_assets(&state.db, id).await?;
-    Ok(Json(serde_json::json!({"album": album, "assets": assets})))
+    let sub_albums = media_service::list_albums(&state.db, &PaginationParams { page: None, per_page: Some(100) }, Some(id)).await?;
+    let breadcrumbs = media_service::get_album_breadcrumbs(&state.db, id).await?;
+    Ok(Json(serde_json::json!({"album": album, "assets": assets, "sub_albums": sub_albums.data, "breadcrumbs": breadcrumbs})))
 }
 
 /// Public endpoint - no auth required
@@ -43,7 +46,9 @@ pub async fn get_album_public(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let album = media_service::get_album(&state.db, id).await?;
     let assets = media_service::get_album_assets(&state.db, id).await?;
-    Ok(Json(serde_json::json!({"album": album, "assets": assets})))
+    let sub_albums = media_service::list_albums(&state.db, &PaginationParams { page: None, per_page: Some(100) }, Some(id)).await?;
+    let breadcrumbs = media_service::get_album_breadcrumbs(&state.db, id).await?;
+    Ok(Json(serde_json::json!({"album": album, "assets": assets, "sub_albums": sub_albums.data, "breadcrumbs": breadcrumbs})))
 }
 
 /// Public endpoint - download all album assets as ZIP

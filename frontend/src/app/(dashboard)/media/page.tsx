@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageLoading } from "@/components/ui/loading";
-import { FolderOpen, Plus, FileText, Share2, Check, Download, Trash2 } from "lucide-react";
+import { FolderOpen, Plus, FileText, Share2, Check, Download, Trash2, Folder } from "lucide-react";
 import { toast } from "sonner";
 import type { MediaAlbum } from "@/types";
 
@@ -24,7 +24,7 @@ export default function MediaPage() {
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const { data: albums, isLoading } = useQuery({
-    queryKey: ["media-albums"],
+    queryKey: ["media-albums", "root"],
     queryFn: () => api.get("/media/albums").then((r) => r.data),
   });
 
@@ -115,9 +115,17 @@ export default function MediaPage() {
                   {album.description || "Tanpa deskripsi"}
                 </p>
                 <div className="flex items-center justify-between mt-3">
-                  <div className="flex items-center gap-1 text-sm text-[var(--muted-foreground)]">
-                    <FileText className="h-3.5 w-3.5" />
-                    {album.asset_count ?? 0} file
+                  <div className="flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+                    {(album.sub_album_count ?? 0) > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Folder className="h-3.5 w-3.5" />
+                        {album.sub_album_count}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <FileText className="h-3.5 w-3.5" />
+                      {album.asset_count ?? 0} file
+                    </span>
                   </div>
                   <div className="flex items-center gap-1">
                     <button

@@ -19,6 +19,8 @@ import {
   RotateCcw,
   Upload,
   FolderOpen,
+  FolderPlus,
+  Folder,
   Image,
   Video,
   FileText,
@@ -29,6 +31,8 @@ import {
   Share2,
   Link2,
   Check,
+  ChevronRight,
+  Home,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { MediaAlbum, MediaAsset } from "@/types";
@@ -73,14 +77,23 @@ export default function MediaAlbumDetailPage() {
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
   const [copiedAlbum, setCopiedAlbum] = useState(false);
   const [downloadingZip, setDownloadingZip] = useState(false);
+  const [showCreateSubFolder, setShowCreateSubFolder] = useState(false);
+  const [subFolderForm, setSubFolderForm] = useState({ title: "", description: "" });
 
-  const { data: albumData, isLoading } = useQuery<{ album: MediaAlbum; assets: MediaAsset[] }>({
+  const { data: albumData, isLoading } = useQuery<{
+    album: MediaAlbum;
+    assets: MediaAsset[];
+    sub_albums: MediaAlbum[];
+    breadcrumbs: MediaAlbum[];
+  }>({
     queryKey: ["media-album", id],
     queryFn: () => api.get(`/media/albums/${id}`).then((r) => r.data),
   });
 
   const album = albumData?.album;
   const assets = albumData?.assets;
+  const subAlbums = albumData?.sub_albums ?? [];
+  const breadcrumbs = albumData?.breadcrumbs ?? [];
 
   const uploadMutation = useMutation({
     mutationFn: async (fileList: File[]) => {
@@ -117,7 +130,11 @@ export default function MediaAlbumDetailPage() {
     mutationFn: () => api.delete(`/media/albums/${id}`),
     onSuccess: () => {
       toast.success("Album berhasil dihapus");
-      router.push("/media");
+      if (album?.parent_album_id) {
+        router.push(`/media/${album.parent_album_id}`);
+      } else {
+        router.push("/media");
+      }
     },
     onError: () => toast.error("Gagal menghapus album"),
   });
@@ -140,6 +157,19 @@ export default function MediaAlbumDetailPage() {
       toast.success("File berhasil dihapus");
     },
     onError: () => toast.error("Gagal menghapus file"),
+  });
+
+  const createSubFolderMutation = useMutation({
+    mutationFn: (data: typeof subFolderForm) =>
+      api.post("/media/albums", { ...data, parent_album_id: id }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["media-album", id] });
+      queryClient.invalidateQueries({ queryKey: ["media-albums"] });
+      setShowCreateSubFolder(false);
+      setSubFolderForm({ title: "", description: "" });
+      toast.success("Sub-folder berhasil dibuat");
+    },
+    onError: () => toast.error("Gagal membuat sub-folder"),
   });
 
   const copyAlbumLink = () => {
@@ -173,11 +203,43 @@ export default function MediaAlbumDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* Breadcrumb navigation */}
+      <nav className="flex items-center gap-1 text-sm text-gray-500 overflow-x-auto">
+        <button
+          onClick={() => router.push("/media")}
+          className="flex items-center gap-1 hover:text-gray-900 whitespace-nowrap"
+        >
+          <Home className="h-4 w-4" />
+          Media
+        </button>
+        {breadcrumbs.map((crumb, idx) => (
+          <span key={crumb.id} className="flex items-center gap-1">
+            <ChevronRight className="h-4 w-4 flex-shrink-0" />
+            {idx === breadcrumbs.length - 1 ? (
+              <span className="font-medium text-gray-900 whitespace-nowrap">{crumb.title}</span>
+            ) : (
+              <button
+                onClick={() => router.push(`/media/${crumb.id}`)}
+                className="hover:text-gray-900 whitespace-nowrap"
+              >
+                {crumb.title}
+              </button>
+            )}
+          </span>
+        ))}
+      </nav>
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
         <div className="flex items-start gap-4">
           <button
-            onClick={() => router.push("/media")}
+            onClick={() => {
+              if (album.parent_album_id) {
+                router.push(`/media/${album.parent_album_id}`);
+              } else {
+                router.push("/media");
+              }
+            }}
             className="mt-1 rounded-md p-1.5 hover:bg-gray-100"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -191,6 +253,11 @@ export default function MediaAlbumDetailPage() {
                 <h1 className="text-xl sm:text-2xl font-bold">{album.title}</h1>
                 <div className="flex flex-wrap items-center gap-2 mt-0.5 text-sm text-gray-500">
                   {album.album_date && <span>{formatDate(album.album_date)}</span>}
+                  {subAlbums.length > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Folder className="h-3.5 w-3.5" /> {subAlbums.length} folder
+                    </span>
+                  )}
                   <span>{assets?.length ?? 0} file</span>
                   {isDeleted && <Badge variant="danger">Dihapus</Badge>}
                 </div>
@@ -204,6 +271,14 @@ export default function MediaAlbumDetailPage() {
         <div className="flex flex-wrap items-center gap-2">
           {!isDeleted && (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCreateSubFolder(true)}
+              >
+                <FolderPlus className="mr-2 h-4 w-4" />
+                Sub-Folder
+              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -268,81 +343,153 @@ export default function MediaAlbumDetailPage() {
         </div>
       </div>
 
-      {/* Asset Grid */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-        {assets && assets.length > 0 ? (
-          assets.map((asset) => (
-            <div
-              key={asset.id}
-              className="group relative cursor-pointer rounded-lg border overflow-hidden"
-              onClick={() => setPreviewAsset(asset)}
-            >
-              {asset.media_type === "image" && asset.file_path ? (
-                <div
-                  className="aspect-square bg-gray-100 bg-cover bg-center"
-                  style={{
-                    backgroundImage: `url(/api/files/${asset.file_path})`,
-                  }}
-                />
-              ) : (
-                <div className="flex aspect-square flex-col items-center justify-center gap-2 bg-gray-50">
-                  {getAssetIcon(asset.media_type, asset.file_mime || undefined)}
-                  <span className="text-xs text-gray-400 uppercase">
-                    {asset.file_name?.split(".").pop() || asset.media_type}
-                  </span>
+      {/* Sub-folders */}
+      {subAlbums.length > 0 && (
+        <div>
+          <h2 className="text-sm font-medium text-gray-500 mb-3">Folder</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {subAlbums.map((sub) => (
+              <div
+                key={sub.id}
+                onClick={() => router.push(`/media/${sub.id}`)}
+                className="group flex cursor-pointer items-center gap-3 rounded-lg border bg-white p-4 transition-shadow hover:shadow-md"
+              >
+                <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-amber-50">
+                  <Folder className="h-5 w-5 text-amber-500" />
                 </div>
-              )}
-              <div className="p-2">
-                <p className="truncate text-xs font-medium">
-                  {asset.title || asset.file_name || "Untitled"}
-                </p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  {getSmallAssetIcon(asset.media_type, asset.file_mime || undefined)}
-                  <span className="text-xs text-gray-400">
-                    {asset.file_size ? formatFileSize(asset.file_size) : asset.media_type}
-                  </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{sub.title}</p>
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    {(sub.sub_album_count ?? 0) > 0 && (
+                      <span>{sub.sub_album_count} folder</span>
+                    )}
+                    <span>{sub.asset_count ?? 0} file</span>
+                  </div>
                 </div>
               </div>
-              {/* Actions overlay */}
-              <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-                {asset.file_path && (
-                  <a
-                    href={`/api/files/${asset.file_path}`}
-                    className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
-                    download
-                    onClick={(e) => e.stopPropagation()}
-                    title="Unduh"
-                  >
-                    <Download className="h-4 w-4 text-gray-700" />
-                  </a>
-                )}
-                <button
-                  onClick={(e) => copyAssetLink(e, asset)}
-                  className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
-                  title="Salin link"
-                >
-                  {copiedAssetId === asset.id ? (
-                    <Check className="h-4 w-4 text-green-500" />
-                  ) : (
-                    <Link2 className="h-4 w-4 text-gray-700" />
-                  )}
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); setShowDeleteAsset(asset.id); }}
-                  className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
-                  title="Hapus"
-                >
-                  <X className="h-4 w-4 text-red-500" />
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="col-span-full py-16 text-center text-sm text-gray-500">
-            Belum ada file di album ini. Klik &quot;Unggah File&quot; untuk menambahkan.
+            ))}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Asset Grid */}
+      {(assets && assets.length > 0) || subAlbums.length === 0 ? (
+        <div>
+          {subAlbums.length > 0 && assets && assets.length > 0 && (
+            <h2 className="text-sm font-medium text-gray-500 mb-3">File</h2>
+          )}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {assets && assets.length > 0 ? (
+              assets.map((asset) => (
+                <div
+                  key={asset.id}
+                  className="group relative cursor-pointer rounded-lg border overflow-hidden"
+                  onClick={() => setPreviewAsset(asset)}
+                >
+                  {asset.media_type === "image" && asset.file_path ? (
+                    <div
+                      className="aspect-square bg-gray-100 bg-cover bg-center"
+                      style={{
+                        backgroundImage: `url(/api/files/${asset.file_path})`,
+                      }}
+                    />
+                  ) : (
+                    <div className="flex aspect-square flex-col items-center justify-center gap-2 bg-gray-50">
+                      {getAssetIcon(asset.media_type, asset.file_mime || undefined)}
+                      <span className="text-xs text-gray-400 uppercase">
+                        {asset.file_name?.split(".").pop() || asset.media_type}
+                      </span>
+                    </div>
+                  )}
+                  <div className="p-2">
+                    <p className="truncate text-xs font-medium">
+                      {asset.title || asset.file_name || "Untitled"}
+                    </p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {getSmallAssetIcon(asset.media_type, asset.file_mime || undefined)}
+                      <span className="text-xs text-gray-400">
+                        {asset.file_size ? formatFileSize(asset.file_size) : asset.media_type}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Actions overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                    {asset.file_path && (
+                      <a
+                        href={`/api/files/${asset.file_path}`}
+                        className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
+                        download
+                        onClick={(e) => e.stopPropagation()}
+                        title="Unduh"
+                      >
+                        <Download className="h-4 w-4 text-gray-700" />
+                      </a>
+                    )}
+                    <button
+                      onClick={(e) => copyAssetLink(e, asset)}
+                      className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
+                      title="Salin link"
+                    >
+                      {copiedAssetId === asset.id ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Link2 className="h-4 w-4 text-gray-700" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setShowDeleteAsset(asset.id); }}
+                      className="rounded-full bg-white p-2 shadow hover:bg-gray-100"
+                      title="Hapus"
+                    >
+                      <X className="h-4 w-4 text-red-500" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full py-16 text-center text-sm text-gray-500">
+                Belum ada file di album ini. Klik &quot;Unggah File&quot; untuk menambahkan atau buat sub-folder.
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Create Sub-Folder Modal */}
+      <Modal open={showCreateSubFolder} onClose={() => setShowCreateSubFolder(false)} title="Buat Sub-Folder">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            createSubFolderMutation.mutate(subFolderForm);
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Nama Folder</label>
+            <Input
+              value={subFolderForm.title}
+              onChange={(e) => setSubFolderForm({ ...subFolderForm, title: e.target.value })}
+              placeholder="Contoh: Foto Kegiatan"
+              required
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-sm font-medium">Deskripsi</label>
+            <Textarea
+              value={subFolderForm.description}
+              onChange={(e) => setSubFolderForm({ ...subFolderForm, description: e.target.value })}
+            />
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button type="button" variant="outline" onClick={() => setShowCreateSubFolder(false)}>
+              Batal
+            </Button>
+            <Button type="submit" disabled={createSubFolderMutation.isPending}>
+              {createSubFolderMutation.isPending ? "Membuat..." : "Buat Folder"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Upload Modal */}
       <Modal open={showUpload} onClose={() => setShowUpload(false)} title="Unggah File" size="lg">
@@ -408,7 +555,7 @@ export default function MediaAlbumDetailPage() {
         onClose={() => setShowDelete(false)}
         onConfirm={() => deleteAlbumMutation.mutate()}
         title="Hapus Album"
-        message={`Album "${album.title}" dan semua file-nya akan dipindahkan ke sampah.`}
+        message={`Album "${album.title}" dan semua file serta sub-folder di dalamnya akan dipindahkan ke sampah.`}
         confirmLabel="Hapus"
         variant="danger"
         loading={deleteAlbumMutation.isPending}

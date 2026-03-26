@@ -18,8 +18,11 @@ pub struct MediaAlbum {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub parent_album_id: Option<Uuid>,
     #[sqlx(default)]
     pub asset_count: Option<i64>,
+    #[sqlx(default)]
+    pub sub_album_count: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, FromRow)]
@@ -54,6 +57,12 @@ pub struct CreateAlbumRequest {
     pub activity_id: Option<Uuid>,
     pub program_id: Option<Uuid>,
     pub album_date: Option<NaiveDate>,
+    pub parent_album_id: Option<Uuid>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AlbumListFilter {
+    pub parent_id: Option<Uuid>,
 }
 
 #[derive(Debug, Deserialize)]
