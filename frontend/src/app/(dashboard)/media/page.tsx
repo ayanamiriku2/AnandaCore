@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageLoading } from "@/components/ui/loading";
-import { FolderOpen, Plus, FileText, Share2, Check } from "lucide-react";
+import { FolderOpen, Plus, FileText, Share2, Check, Download, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import type { MediaAlbum } from "@/types";
 
@@ -19,6 +20,8 @@ export default function MediaPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: "", description: "" });
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deleteAlbumId, setDeleteAlbumId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const { data: albums, isLoading } = useQuery({
     queryKey: ["media-albums"],
@@ -35,6 +38,40 @@ export default function MediaPage() {
     },
     onError: () => toast.error("Gagal membuat album"),
   });
+
+  const deleteAlbumMutation = useMutation({
+    mutationFn: (albumId: string) => api.delete(`/media/albums/${albumId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["media-albums"] });
+      setDeleteAlbumId(null);
+      toast.success("Album berhasil dihapus");
+    },
+    onError: () => toast.error("Gagal menghapus album"),
+  });
+
+  const downloadAlbumZip = async (e: React.MouseEvent, albumId: string) => {
+    e.stopPropagation();
+    setDownloadingId(albumId);
+    try {
+      const response = await fetch(`/api/media/albums/${albumId}/download-zip`);
+      if (!response.ok) throw new Error("Download failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const contentDisposition = response.headers.get("content-disposition");
+      const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
+      const filename = filenameMatch ? filenameMatch[1] : `album-${albumId}.zip`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Album berhasil diunduh");
+    } catch {
+      toast.error("Gagal mengunduh album");
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const copyAlbumLink = (e: React.MouseEvent, albumId: string) => {
     e.stopPropagation();
@@ -82,17 +119,38 @@ export default function MediaPage() {
                     <FileText className="h-3.5 w-3.5" />
                     {album.asset_count ?? 0} file
                   </div>
-                  <button
-                    onClick={(e) => copyAlbumLink(e, album.id)}
-                    className="rounded-md p-1.5 text-gray-400 opacity-0 transition-all hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
-                    title="Salin link album"
-                  >
-                    {copiedId === album.id ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Share2 className="h-4 w-4" />
-                    )}
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={(e) => downloadAlbumZip(e, album.id)}
+                      disabled={downloadingId === album.id || (album.asset_count ?? 0) === 0}
+                      className="rounded-md p-1.5 text-gray-400 opacity-0 transition-all hover:bg-blue-50 hover:text-blue-600 group-hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Unduh album sebagai ZIP"
+                    >
+                      {downloadingId === album.id ? (
+                        <Download className="h-4 w-4 animate-pulse" />
+                      ) : (
+                        <Download className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => copyAlbumLink(e, album.id)}
+                      className="rounded-md p-1.5 text-gray-400 opacity-0 transition-all hover:bg-gray-100 hover:text-gray-600 group-hover:opacity-100"
+                      title="Salin link album"
+                    >
+                      {copiedId === album.id ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Share2 className="h-4 w-4" />
+                      )}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeleteAlbumId(album.id); }}
+                      className="rounded-md p-1.5 text-gray-400 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                      title="Hapus album"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -136,6 +194,18 @@ export default function MediaPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Delete Album Confirm */}
+      <ConfirmDialog
+        open={!!deleteAlbumId}
+        onClose={() => setDeleteAlbumId(null)}
+        onConfirm={() => deleteAlbumId && deleteAlbumMutation.mutate(deleteAlbumId)}
+        title="Hapus Album"
+        message="Album ini dan semua file di dalamnya akan dipindahkan ke sampah."
+        confirmLabel="Hapus"
+        variant="danger"
+        loading={deleteAlbumMutation.isPending}
+      />
     </div>
   );
 }

@@ -72,6 +72,7 @@ export default function MediaAlbumDetailPage() {
   const [editForm, setEditForm] = useState({ title: "", description: "" });
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
   const [copiedAlbum, setCopiedAlbum] = useState(false);
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   const { data: albumData, isLoading } = useQuery<{ album: MediaAlbum; assets: MediaAsset[] }>({
     queryKey: ["media-album", id],
@@ -214,6 +215,36 @@ export default function MediaAlbumDetailPage() {
                   <Share2 className="mr-2 h-4 w-4" />
                 )}
                 {copiedAlbum ? "Tersalin" : "Bagikan"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={downloadingZip || !assets?.length}
+                onClick={async () => {
+                  setDownloadingZip(true);
+                  try {
+                    const response = await fetch(`/api/media/albums/${id}/download-zip`);
+                    if (!response.ok) throw new Error("Download failed");
+                    const blob = await response.blob();
+                    const url = URL.createObjectURL(blob);
+                    const contentDisposition = response.headers.get("content-disposition");
+                    const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
+                    const filename = filenameMatch ? filenameMatch[1] : `${album.title}.zip`;
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    toast.success("Album berhasil diunduh");
+                  } catch {
+                    toast.error("Gagal mengunduh album");
+                  } finally {
+                    setDownloadingZip(false);
+                  }
+                }}
+              >
+                <Download className="mr-2 h-4 w-4" />
+                {downloadingZip ? "Mengunduh..." : "Unduh ZIP"}
               </Button>
               <Button variant="outline" size="sm" onClick={openEdit}>
                 Edit
