@@ -49,17 +49,24 @@ pub async fn download(
     State(state): State<Arc<AppState>>,
     Path(key): Path<String>,
 ) -> Result<Response, AppError> {
-    let data = state.storage.download(&key).await
+    let byte_stream = state.storage.get_object_stream(&key).await
         .map_err(|e| AppError::NotFound(format!("File tidak ditemukan: {}", e)))?;
 
     let content_type = mime_guess::from_path(&key)
         .first_or_octet_stream()
         .to_string();
 
+    let filename = key.split('/').last().unwrap_or(&key);
+
+    // Convert ByteStream to streaming body using ReaderStream
+    let async_read = byte_stream.into_async_read();
+    let stream = tokio_util::io::ReaderStream::new(async_read);
+    let body = Body::from_stream(stream);
+
     Ok(Response::builder()
         .status(StatusCode::OK)
         .header(header::CONTENT_TYPE, content_type)
-        .header(header::CONTENT_DISPOSITION, format!("inline; filename=\"{}\"", key.split('/').last().unwrap_or(&key)))
-        .body(Body::from(data))
+        .header(header::CONTENT_DISPOSITION, format!("inline; filename=\"{}\"", filename))
+        .body(body)
         .unwrap())
 }

@@ -187,6 +187,19 @@ impl StorageService {
         Ok(data)
     }
 
+    /// For streaming large files without buffering to memory
+    pub async fn get_object_stream(&self, key: &str) -> Result<aws_sdk_s3::primitives::ByteStream> {
+        let resp = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .send()
+            .await?;
+
+        Ok(resp.body)
+    }
+
     pub async fn delete(&self, key: &str) -> Result<()> {
         self.client
             .delete_object()
