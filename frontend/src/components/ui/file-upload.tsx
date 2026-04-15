@@ -24,14 +24,24 @@ function getFileIcon(type: string) {
 function formatSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function formatLimit(maxSizeMB: number) {
+  if (maxSizeMB >= 1024) {
+    const gb = maxSizeMB / 1024;
+    const value = Number.isInteger(gb) ? gb.toString() : gb.toFixed(1);
+    return `${value}GB`;
+  }
+  return `${maxSizeMB}MB`;
 }
 
 export function FileUpload({
   onFilesSelected,
   accept,
   multiple = false,
-  maxSizeMB = 100,
+  maxSizeMB = 30 * 1024,
   className,
   label = "Seret file ke sini atau klik untuk memilih",
   disabled = false,
@@ -99,7 +109,7 @@ export function FileUpload({
         <Upload className="mb-2 h-8 w-8 text-gray-400" />
         <p className="text-sm text-gray-600">{label}</p>
         <p className="mt-1 text-xs text-gray-400">
-          Maks {maxSizeMB}MB per file
+          Maks {formatLimit(maxSizeMB)} per file
         </p>
         <input
           ref={inputRef}

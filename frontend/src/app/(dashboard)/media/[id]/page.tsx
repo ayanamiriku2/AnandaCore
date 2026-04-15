@@ -497,7 +497,7 @@ export default function MediaAlbumDetailPage() {
           <FileUpload
             onFilesSelected={(selected) => setPendingFiles(selected)}
             multiple
-            maxSizeMB={100}
+            maxSizeMB={30 * 1024}
             label="Seret file ke sini atau klik untuk memilih (gambar, video, dokumen, arsip, dll)"
           />
           <div className="flex justify-end gap-3">
