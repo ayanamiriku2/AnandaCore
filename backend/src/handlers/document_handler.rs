@@ -5,9 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::{
@@ -17,6 +15,7 @@ use crate::{
     models::*,
     services::{document_service, audit_service},
     storage::StorageService,
+    upload_stream::stream_field_to_storage,
     AppState,
 };
 
@@ -93,10 +92,10 @@ pub async fn upload_file(
     // Ensure the document exists
     let _doc = document_service::get_document(&state.db, id).await?;
 
-    let mut temp_file_path: Option<PathBuf> = None;
     let mut file_size: Option<i64> = None;
     let mut file_name: Option<String> = None;
     let mut content_type: Option<String> = None;
+    let mut stored_key: Option<String> = None;
     let mut change_notes: Option<String> = None;
 
     while let Some(mut field) = multipart
@@ -109,35 +108,31 @@ pub async fn upload_file(
             "file" => {
                 file_name = field.file_name().map(|s| s.to_string());
                 content_type = field.content_type().map(|s| s.to_string());
-
-                let path = std::env::temp_dir().join(format!("anandacore-upload-{}", Uuid::new_v4()));
-                let mut tmp = tokio::fs::File::create(&path)
-                    .await
-                    .map_err(|e| AppError::Internal(format!("Gagal membuat file sementara: {}", e)))?;
-
-                let mut total_size: usize = 0;
-                while let Some(chunk) = field
-                    .chunk()
-                    .await
-                    .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?
-                {
-                    total_size += chunk.len();
-                    if total_size > state.config.max_upload_size {
-                        let _ = tokio::fs::remove_file(&path).await;
-                        return Err(AppError::Validation("Ukuran file melebihi batas maksimum".into()));
-                    }
-
-                    tmp.write_all(&chunk)
-                        .await
-                        .map_err(|e| AppError::Internal(format!("Gagal menulis file sementara: {}", e)))?;
+                let mime = content_type
+                    .clone()
+                    .unwrap_or_else(|| "application/octet-stream".to_string());
+                if !StorageService::validate_file_type(&mime) {
+                    return Err(AppError::Validation(format!(
+                        "Tipe file '{}' tidak diizinkan",
+                        mime
+                    )));
                 }
 
-                tmp.flush()
-                    .await
-                    .map_err(|e| AppError::Internal(format!("Gagal flush file sementara: {}", e)))?;
-
-                temp_file_path = Some(path);
-                file_size = Some(total_size as i64);
+                let current_file_name = file_name.clone().unwrap_or_else(|| "document.bin".to_string());
+                let key = StorageService::generate_key("documents", &current_file_name);
+                file_size = Some(
+                    stream_field_to_storage(
+                        &mut field,
+                        &state.storage,
+                        &key,
+                        &mime,
+                        state.config.max_upload_size,
+                    )
+                    .await?,
+                );
+                stored_key = Some(key);
+                file_name = Some(current_file_name);
+                content_type = Some(mime);
             }
             "change_notes" => {
                 change_notes = Some(
@@ -151,26 +146,10 @@ pub async fn upload_file(
         }
     }
 
-    let temp_path = temp_file_path
-        .ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
-    let file_name = file_name.unwrap_or_else(|| "document.bin".to_string());
-    let mime = content_type.unwrap_or_else(|| "application/octet-stream".to_string());
-
-    if !StorageService::validate_file_type(&mime) {
-        let _ = tokio::fs::remove_file(&temp_path).await;
-        return Err(AppError::Validation(format!(
-            "Tipe file '{}' tidak diizinkan",
-            mime
-        )));
-    }
-
-    let file_size = file_size.unwrap_or(0);
-    let key = StorageService::generate_key("documents", &file_name);
-
-    let upload_result = state.storage.upload_from_path(&key, &temp_path, &mime).await;
-    let _ = tokio::fs::remove_file(&temp_path).await;
-    let stored_key = upload_result
-        .map_err(|e| AppError::Internal(format!("Gagal upload file: {}", e)))?;
+    let file_name = file_name.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
+    let mime = content_type.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
+    let file_size = file_size.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
+    let stored_key = stored_key.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
 
     // Get next version number
     let next_version: i32 = sqlx::query_scalar(

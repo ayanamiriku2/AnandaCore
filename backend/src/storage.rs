@@ -2,6 +2,7 @@ use anyhow::Result;
 use aws_sdk_s3::{
     config::{Credentials, Region},
     primitives::ByteStream,
+    types::{CompletedMultipartUpload, CompletedPart},
     Client,
 };
 use std::path::Path;
@@ -87,6 +88,90 @@ impl StorageService {
             .await?;
 
         Ok(key.to_string())
+    }
+
+    pub async fn start_multipart_upload(&self, key: &str, content_type: &str) -> Result<String> {
+        let response = self
+            .client
+            .create_multipart_upload()
+            .bucket(&self.bucket)
+            .key(key)
+            .content_type(content_type)
+            .send()
+            .await?;
+
+        Ok(response
+            .upload_id()
+            .ok_or_else(|| anyhow::anyhow!("S3 tidak mengembalikan upload_id"))?
+            .to_string())
+    }
+
+    pub async fn upload_part(
+        &self,
+        key: &str,
+        upload_id: &str,
+        part_number: i32,
+        data: Vec<u8>,
+    ) -> Result<String> {
+        let response = self
+            .client
+            .upload_part()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .part_number(part_number)
+            .body(ByteStream::from(data))
+            .send()
+            .await?;
+
+        Ok(response
+            .e_tag()
+            .ok_or_else(|| anyhow::anyhow!("S3 tidak mengembalikan ETag untuk part {}", part_number))?
+            .to_string())
+    }
+
+    pub async fn complete_multipart_upload(
+        &self,
+        key: &str,
+        upload_id: &str,
+        parts: Vec<(i32, String)>,
+    ) -> Result<String> {
+        let completed_parts = parts
+            .into_iter()
+            .map(|(part_number, etag)| {
+                CompletedPart::builder()
+                    .part_number(part_number)
+                    .e_tag(etag)
+                    .build()
+            })
+            .collect();
+
+        let multipart_upload = CompletedMultipartUpload::builder()
+            .set_parts(Some(completed_parts))
+            .build();
+
+        self.client
+            .complete_multipart_upload()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .multipart_upload(multipart_upload)
+            .send()
+            .await?;
+
+        Ok(key.to_string())
+    }
+
+    pub async fn abort_multipart_upload(&self, key: &str, upload_id: &str) -> Result<()> {
+        self.client
+            .abort_multipart_upload()
+            .bucket(&self.bucket)
+            .key(key)
+            .upload_id(upload_id)
+            .send()
+            .await?;
+
+        Ok(())
     }
 
     pub async fn download(&self, key: &str) -> Result<Vec<u8>> {

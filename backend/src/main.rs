@@ -19,6 +19,7 @@ mod models;
 mod routes;
 mod services;
 mod storage;
+mod upload_stream;
 
 pub use config::AppConfig;
 

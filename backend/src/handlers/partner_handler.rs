@@ -5,9 +5,7 @@ use axum::{
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::{
@@ -17,6 +15,7 @@ use crate::{
     models::*,
     services::partner_service,
     storage::StorageService,
+    upload_stream::stream_field_to_storage,
     AppState,
 };
 
@@ -297,38 +296,15 @@ pub async fn upload_agreement_file(
         )));
     }
 
-    let path: PathBuf = std::env::temp_dir().join(format!("anandacore-upload-{}", Uuid::new_v4()));
-    let mut tmp = tokio::fs::File::create(&path)
-        .await
-        .map_err(|e| AppError::Internal(format!("Gagal membuat file sementara: {}", e)))?;
-
-    let mut total_size: usize = 0;
-    while let Some(chunk) = field
-        .chunk()
-        .await
-        .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?
-    {
-        total_size += chunk.len();
-        if total_size > state.config.max_upload_size {
-            let _ = tokio::fs::remove_file(&path).await;
-            return Err(AppError::Validation(
-                "Ukuran file melebihi batas maksimum".into(),
-            ));
-        }
-
-        tmp.write_all(&chunk)
-            .await
-            .map_err(|e| AppError::Internal(format!("Gagal menulis file sementara: {}", e)))?;
-    }
-
-    tmp.flush()
-        .await
-        .map_err(|e| AppError::Internal(format!("Gagal flush file sementara: {}", e)))?;
-
     let key = StorageService::generate_key("agreements", &file_name);
-    let upload_result = state.storage.upload_from_path(&key, &path, &content_type).await;
-    let _ = tokio::fs::remove_file(&path).await;
-    upload_result.map_err(|e| AppError::Internal(format!("Gagal upload: {}", e)))?;
+    stream_field_to_storage(
+        &mut field,
+        &state.storage,
+        &key,
+        &content_type,
+        state.config.max_upload_size,
+    )
+    .await?;
 
     let updated = sqlx::query_as::<_, PartnershipAgreement>(
         r#"UPDATE partnership_agreements

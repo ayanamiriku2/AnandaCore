@@ -8,9 +8,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::FromRow;
-use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::{
@@ -20,6 +18,7 @@ use crate::{
     models::*,
     services::letter_service,
     storage::StorageService,
+    upload_stream::stream_field_to_storage,
     AppState,
 };
 
@@ -98,10 +97,10 @@ pub async fn upload_attachment(
     // Verify the letter exists
     let _letter = letter_service::get_letter(&state.db, letter_id).await?;
 
-    let mut temp_file_path: Option<PathBuf> = None;
     let mut file_size: Option<i64> = None;
     let mut file_name: Option<String> = None;
     let mut content_type: Option<String> = None;
+    let mut stored_key: Option<String> = None;
     let mut title: Option<String> = None;
 
     while let Ok(Some(mut field)) = multipart.next_field().await {
@@ -110,35 +109,28 @@ pub async fn upload_attachment(
             "file" => {
                 file_name = field.file_name().map(|f| f.to_string());
                 content_type = field.content_type().map(|c| c.to_string());
-
-                let path = std::env::temp_dir().join(format!("anandacore-upload-{}", Uuid::new_v4()));
-                let mut tmp = tokio::fs::File::create(&path)
-                    .await
-                    .map_err(|e| AppError::Internal(format!("Gagal membuat file sementara: {}", e)))?;
-
-                let mut total_size: usize = 0;
-                while let Some(chunk) = field
-                    .chunk()
-                    .await
-                    .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?
-                {
-                    total_size += chunk.len();
-                    if total_size > state.config.max_upload_size {
-                        let _ = tokio::fs::remove_file(&path).await;
-                        return Err(AppError::Validation("Ukuran file melebihi batas maksimum".into()));
-                    }
-
-                    tmp.write_all(&chunk)
-                        .await
-                        .map_err(|e| AppError::Internal(format!("Gagal menulis file sementara: {}", e)))?;
+                let mime = content_type
+                    .clone()
+                    .unwrap_or_else(|| "application/octet-stream".to_string());
+                if !StorageService::validate_file_type(&mime) {
+                    return Err(AppError::Validation(format!("Tipe file '{}' tidak diizinkan", mime)));
                 }
 
-                tmp.flush()
-                    .await
-                    .map_err(|e| AppError::Internal(format!("Gagal flush file sementara: {}", e)))?;
-
-                temp_file_path = Some(path);
-                file_size = Some(total_size as i64);
+                let current_file_name = file_name.clone().unwrap_or_else(|| "attachment".to_string());
+                let key = StorageService::generate_key("letters", &current_file_name);
+                file_size = Some(
+                    stream_field_to_storage(
+                        &mut field,
+                        &state.storage,
+                        &key,
+                        &mime,
+                        state.config.max_upload_size,
+                    )
+                    .await?,
+                );
+                stored_key = Some(key);
+                file_name = Some(current_file_name);
+                content_type = Some(mime);
             }
             "title" => {
                 let text = field.text().await
@@ -151,22 +143,10 @@ pub async fn upload_attachment(
         }
     }
 
-    let temp_path = temp_file_path
-        .ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
-    let name = file_name.unwrap_or_else(|| "attachment".to_string());
-    let mime = content_type.unwrap_or_else(|| "application/octet-stream".to_string());
-
-    if !StorageService::validate_file_type(&mime) {
-        let _ = tokio::fs::remove_file(&temp_path).await;
-        return Err(AppError::Validation(format!("Tipe file '{}' tidak diizinkan", mime)));
-    }
-
-    let file_size = file_size.unwrap_or(0);
-    let key = StorageService::generate_key("letters", &name);
-
-    let upload_result = state.storage.upload_from_path(&key, &temp_path, &mime).await;
-    let _ = tokio::fs::remove_file(&temp_path).await;
-    upload_result.map_err(|e| AppError::Internal(format!("Gagal upload: {}", e)))?;
+    let name = file_name.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
+    let mime = content_type.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
+    let file_size = file_size.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
+    let key = stored_key.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
 
     let attachment = sqlx::query_as::<_, LetterAttachment>(
         r#"INSERT INTO letter_attachments (letter_id, title, file_path, file_name, file_size, file_mime, uploaded_by)

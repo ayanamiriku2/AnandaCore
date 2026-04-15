@@ -6,9 +6,7 @@ use axum::{
     Json,
 };
 use std::io::{Write, Cursor};
-use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::{
@@ -18,6 +16,7 @@ use crate::{
     models::*,
     services::media_service,
     storage::StorageService,
+    upload_stream::stream_field_to_storage,
     AppState,
 };
 
@@ -174,10 +173,6 @@ pub async fn upload_asset(
     // Verify album exists
     media_service::get_album(&state.db, album_id).await?;
 
-    let mut temp_file_path: Option<PathBuf> = None;
-    let mut file_size: Option<i64> = None;
-    let mut file_name: Option<String> = None;
-    let mut content_type: Option<String> = None;
     let mut title: Option<String> = None;
     let mut description: Option<String> = None;
 
@@ -185,37 +180,51 @@ pub async fn upload_asset(
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "file" => {
-                file_name = field.file_name().map(|s| s.to_string());
-                content_type = field.content_type().map(|s| s.to_string());
+                let original_name = field.file_name().unwrap_or("file").to_string();
+                let mime = field
+                    .content_type()
+                    .unwrap_or("application/octet-stream")
+                    .to_string();
 
-                let path = std::env::temp_dir().join(format!("anandacore-upload-{}", Uuid::new_v4()));
-                let mut tmp = tokio::fs::File::create(&path)
-                    .await
-                    .map_err(|e| AppError::Internal(format!("Gagal membuat file sementara: {}", e)))?;
-
-                let mut total_size: usize = 0;
-                while let Some(chunk) = field
-                    .chunk()
-                    .await
-                    .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?
-                {
-                    total_size += chunk.len();
-                    if total_size > state.config.max_upload_size {
-                        let _ = tokio::fs::remove_file(&path).await;
-                        return Err(AppError::Validation("Ukuran file melebihi batas maksimum".into()));
-                    }
-
-                    tmp.write_all(&chunk)
-                        .await
-                        .map_err(|e| AppError::Internal(format!("Gagal menulis file sementara: {}", e)))?;
+                if !StorageService::validate_file_type(&mime) {
+                    return Err(AppError::Validation(format!("Tipe file '{}' tidak diizinkan", mime)));
                 }
 
-                tmp.flush()
-                    .await
-                    .map_err(|e| AppError::Internal(format!("Gagal flush file sementara: {}", e)))?;
+                let key = StorageService::generate_key("media", &original_name);
+                let file_size = stream_field_to_storage(
+                    &mut field,
+                    &state.storage,
+                    &key,
+                    &mime,
+                    state.config.max_upload_size,
+                )
+                .await?;
 
-                temp_file_path = Some(path);
-                file_size = Some(total_size as i64);
+                let media_type = if mime.starts_with("image/") {
+                    "image"
+                } else if mime.starts_with("video/") {
+                    "video"
+                } else if mime.starts_with("audio/") {
+                    "audio"
+                } else {
+                    "document"
+                };
+
+                let asset = media_service::create_asset(
+                    &state.db,
+                    album_id,
+                    title,
+                    description,
+                    media_type,
+                    &key,
+                    Some(original_name),
+                    file_size,
+                    Some(mime),
+                    current.id,
+                )
+                .await?;
+
+                return Ok(Json(asset));
             }
             "title" => {
                 let text = field.text().await
@@ -237,47 +246,7 @@ pub async fn upload_asset(
         }
     }
 
-    let temp_path = temp_file_path
-        .ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
-    let size = file_size.unwrap_or(0);
-    let mime = content_type.unwrap_or_else(|| "application/octet-stream".to_string());
-
-    if !StorageService::validate_file_type(&mime) {
-        let _ = tokio::fs::remove_file(&temp_path).await;
-        return Err(AppError::Validation(format!("Tipe file '{}' tidak diizinkan", mime)));
-    }
-
-    let original_name = file_name.clone().unwrap_or_else(|| "file".to_string());
-    let key = StorageService::generate_key("media", &original_name);
-
-    let upload_result = state.storage.upload_from_path(&key, &temp_path, &mime).await;
-    let _ = tokio::fs::remove_file(&temp_path).await;
-    upload_result.map_err(|e| AppError::Internal(format!("Gagal upload file: {}", e)))?;
-
-    let media_type = if mime.starts_with("image/") {
-        "image"
-    } else if mime.starts_with("video/") {
-        "video"
-    } else if mime.starts_with("audio/") {
-        "audio"
-    } else {
-        "document"
-    };
-
-    let asset = media_service::create_asset(
-        &state.db,
-        album_id,
-        title,
-        description,
-        media_type,
-        &key,
-        file_name,
-        size,
-        Some(mime),
-        current.id,
-    ).await?;
-
-    Ok(Json(asset))
+    Err(AppError::Validation("Field 'file' wajib diisi".into()))
 }
 
 pub async fn delete_asset(

@@ -5,10 +5,8 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::io::AsyncWriteExt;
-use crate::{errors::AppError, middleware::auth_middleware::CurrentUser, storage::StorageService, AppState};
+use crate::{errors::AppError, middleware::auth_middleware::CurrentUser, storage::StorageService, upload_stream::stream_field_to_storage, AppState};
 
 pub async fn upload(
     State(state): State<Arc<AppState>>,
@@ -26,36 +24,15 @@ pub async fn upload(
             return Err(AppError::Validation(format!("Tipe file '{}' tidak diizinkan", content_type)));
         }
 
-        let path: PathBuf = std::env::temp_dir().join(format!("anandacore-upload-{}", uuid::Uuid::new_v4()));
-        let mut tmp = tokio::fs::File::create(&path)
-            .await
-            .map_err(|e| AppError::Internal(format!("Gagal membuat file sementara: {}", e)))?;
-
-        let mut total_size: usize = 0;
-        while let Some(chunk) = field
-            .chunk()
-            .await
-            .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?
-        {
-            total_size += chunk.len();
-            if total_size > state.config.max_upload_size {
-                let _ = tokio::fs::remove_file(&path).await;
-                return Err(AppError::Validation("Ukuran file melebihi batas maksimum".into()));
-            }
-
-            tmp.write_all(&chunk)
-                .await
-                .map_err(|e| AppError::Internal(format!("Gagal menulis file sementara: {}", e)))?;
-        }
-
-        tmp.flush()
-            .await
-            .map_err(|e| AppError::Internal(format!("Gagal flush file sementara: {}", e)))?;
-
         let key = StorageService::generate_key(&module, &file_name);
-        let upload_result = state.storage.upload_from_path(&key, &path, &content_type).await;
-        let _ = tokio::fs::remove_file(&path).await;
-        upload_result.map_err(|e| AppError::Internal(format!("Gagal upload: {}", e)))?;
+        let total_size = stream_field_to_storage(
+            &mut field,
+            &state.storage,
+            &key,
+            &content_type,
+            state.config.max_upload_size,
+        )
+        .await?;
 
         uploaded.push(serde_json::json!({
             "key": key,
