@@ -4,6 +4,7 @@ use aws_sdk_s3::{
     primitives::ByteStream,
     Client,
 };
+use std::path::Path;
 use std::time::Duration;
 
 use crate::config::AppConfig;
@@ -61,6 +62,26 @@ impl StorageService {
             .bucket(&self.bucket)
             .key(key)
             .body(ByteStream::from(data))
+            .content_type(content_type)
+            .send()
+            .await?;
+
+        Ok(key.to_string())
+    }
+
+    pub async fn upload_from_path(
+        &self,
+        key: &str,
+        path: &Path,
+        content_type: &str,
+    ) -> Result<String> {
+        let body = ByteStream::from_path(path.to_path_buf()).await?;
+
+        self.client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(key)
+            .body(body)
             .content_type(content_type)
             .send()
             .await?;

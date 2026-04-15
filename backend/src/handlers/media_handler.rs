@@ -6,7 +6,9 @@ use axum::{
     Json,
 };
 use std::io::{Write, Cursor};
+use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::{
@@ -172,21 +174,48 @@ pub async fn upload_asset(
     // Verify album exists
     media_service::get_album(&state.db, album_id).await?;
 
-    let mut file_data: Option<Vec<u8>> = None;
+    let mut temp_file_path: Option<PathBuf> = None;
+    let mut file_size: Option<i64> = None;
     let mut file_name: Option<String> = None;
     let mut content_type: Option<String> = None;
     let mut title: Option<String> = None;
     let mut description: Option<String> = None;
 
-    while let Ok(Some(field)) = multipart.next_field().await {
+    while let Ok(Some(mut field)) = multipart.next_field().await {
         let name = field.name().unwrap_or("").to_string();
         match name.as_str() {
             "file" => {
                 file_name = field.file_name().map(|s| s.to_string());
                 content_type = field.content_type().map(|s| s.to_string());
-                let bytes = field.bytes().await
-                    .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?;
-                file_data = Some(bytes.to_vec());
+
+                let path = std::env::temp_dir().join(format!("anandacore-upload-{}", Uuid::new_v4()));
+                let mut tmp = tokio::fs::File::create(&path)
+                    .await
+                    .map_err(|e| AppError::Internal(format!("Gagal membuat file sementara: {}", e)))?;
+
+                let mut total_size: usize = 0;
+                while let Some(chunk) = field
+                    .chunk()
+                    .await
+                    .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?
+                {
+                    total_size += chunk.len();
+                    if total_size > state.config.max_upload_size {
+                        let _ = tokio::fs::remove_file(&path).await;
+                        return Err(AppError::Validation("Ukuran file melebihi batas maksimum".into()));
+                    }
+
+                    tmp.write_all(&chunk)
+                        .await
+                        .map_err(|e| AppError::Internal(format!("Gagal menulis file sementara: {}", e)))?;
+                }
+
+                tmp.flush()
+                    .await
+                    .map_err(|e| AppError::Internal(format!("Gagal flush file sementara: {}", e)))?;
+
+                temp_file_path = Some(path);
+                file_size = Some(total_size as i64);
             }
             "title" => {
                 let text = field.text().await
@@ -208,22 +237,22 @@ pub async fn upload_asset(
         }
     }
 
-    let data = file_data.ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
+    let temp_path = temp_file_path
+        .ok_or_else(|| AppError::Validation("Field 'file' wajib diisi".into()))?;
+    let size = file_size.unwrap_or(0);
     let mime = content_type.unwrap_or_else(|| "application/octet-stream".to_string());
 
     if !StorageService::validate_file_type(&mime) {
+        let _ = tokio::fs::remove_file(&temp_path).await;
         return Err(AppError::Validation(format!("Tipe file '{}' tidak diizinkan", mime)));
-    }
-
-    if data.len() > state.config.max_upload_size {
-        return Err(AppError::Validation("Ukuran file melebihi batas maksimum".into()));
     }
 
     let original_name = file_name.clone().unwrap_or_else(|| "file".to_string());
     let key = StorageService::generate_key("media", &original_name);
 
-    state.storage.upload(&key, data.clone(), &mime).await
-        .map_err(|e| AppError::Internal(format!("Gagal upload file: {}", e)))?;
+    let upload_result = state.storage.upload_from_path(&key, &temp_path, &mime).await;
+    let _ = tokio::fs::remove_file(&temp_path).await;
+    upload_result.map_err(|e| AppError::Internal(format!("Gagal upload file: {}", e)))?;
 
     let media_type = if mime.starts_with("image/") {
         "image"
@@ -243,7 +272,7 @@ pub async fn upload_asset(
         media_type,
         &key,
         file_name,
-        data.len() as i64,
+        size,
         Some(mime),
         current.id,
     ).await?;
