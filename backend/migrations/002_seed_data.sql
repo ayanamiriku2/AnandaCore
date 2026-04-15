@@ -345,7 +345,7 @@ INSERT INTO settings (key, value, value_type, description) VALUES
   ('retention.default_years', '5', 'number', 'Default masa retensi dokumen (tahun)'),
   ('backup.auto_enabled', 'true', 'boolean', 'Backup otomatis aktif'),
   ('backup.schedule', 'daily', 'string', 'Jadwal backup: daily, weekly, monthly'),
-  ('upload.max_size_mb', '100', 'number', 'Ukuran maksimum upload file (MB)'),
+  ('upload.max_size_mb', '30720', 'number', 'Ukuran maksimum upload file (MB)'),
   ('notification.email_enabled', 'false', 'boolean', 'Notifikasi email aktif')
 ON CONFLICT (key) DO NOTHING;
 

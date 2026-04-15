@@ -80,6 +80,7 @@ APP_HOST=0.0.0.0
 APP_PORT=8080
 RUST_LOG=info
 ALLOWED_ORIGINS=https://<FRONTEND_URL_DARI_RAILWAY>
+MAX_UPLOAD_SIZE=32212254720
 ```
 
 > **Catatan**: 
@@ -147,6 +148,7 @@ Setelah semua service berjalan:
 | `APP_HOST` | ❌ | `0.0.0.0` | Host listen |
 | `APP_PORT` | ❌ | `8080` | Port listen |
 | `ALLOWED_ORIGINS` | ❌ | `http://localhost:3000` | CORS origins |
+| `MAX_UPLOAD_SIZE` | ❌ | `32212254720` | Batas upload per file dalam byte (30GB) |
 
 ### Frontend
 | Variable | Wajib | Default | Keterangan |

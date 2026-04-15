@@ -48,7 +48,9 @@ impl AppConfig {
                 .split(',')
                 .map(|s| s.trim().to_string())
                 .collect(),
-            max_upload_size: 100 * 1024 * 1024, // 100MB
+            max_upload_size: std::env::var("MAX_UPLOAD_SIZE")
+                .unwrap_or_else(|_| "32212254720".into()) // 30GB
+                .parse()?,
         })
     }
 }

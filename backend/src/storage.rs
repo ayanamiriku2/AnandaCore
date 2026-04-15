@@ -166,6 +166,6 @@ impl StorageService {
     }
 
     pub fn max_file_size() -> usize {
-        100 * 1024 * 1024 // 100MB
+        30 * 1024 * 1024 * 1024 // 30GB
     }
 }
