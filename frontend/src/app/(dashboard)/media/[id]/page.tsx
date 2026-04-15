@@ -73,6 +73,7 @@ export default function MediaAlbumDetailPage() {
   const [showDeleteAsset, setShowDeleteAsset] = useState<string | null>(null);
   const [previewAsset, setPreviewAsset] = useState<MediaAsset | null>(null);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [editForm, setEditForm] = useState({ title: "", description: "" });
   const [copiedAssetId, setCopiedAssetId] = useState<string | null>(null);
   const [copiedAlbum, setCopiedAlbum] = useState(false);
@@ -97,11 +98,16 @@ export default function MediaAlbumDetailPage() {
 
   const uploadMutation = useMutation({
     mutationFn: async (fileList: File[]) => {
-      for (const file of fileList) {
+      for (let i = 0; i < fileList.length; i++) {
+        const file = fileList[i];
         const formData = new FormData();
         formData.append("file", file);
         await api.post(`/media/albums/${id}/upload`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
+          onUploadProgress: (evt) => {
+            const fileDone = evt.total ? evt.loaded / evt.total : 0;
+            const overall = ((i + fileDone) / fileList.length) * 100;
+            setUploadProgress(Math.round(overall));
+          },
         });
       }
     },
@@ -110,9 +116,13 @@ export default function MediaAlbumDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["media-albums"] });
       setShowUpload(false);
       setPendingFiles([]);
+      setUploadProgress(0);
       toast.success("File berhasil diunggah");
     },
-    onError: () => toast.error("Gagal mengunggah file"),
+    onError: () => {
+      setUploadProgress(0);
+      toast.error("Gagal mengunggah file");
+    },
   });
 
   const updateAlbumMutation = useMutation({
@@ -492,23 +502,38 @@ export default function MediaAlbumDetailPage() {
       </Modal>
 
       {/* Upload Modal */}
-      <Modal open={showUpload} onClose={() => setShowUpload(false)} title="Unggah File" size="lg">
+      <Modal open={showUpload} onClose={() => !uploadMutation.isPending && setShowUpload(false)} title="Unggah File" size="lg">
         <div className="space-y-4">
           <FileUpload
             onFilesSelected={(selected) => setPendingFiles(selected)}
             multiple
             maxSizeMB={30 * 1024}
             label="Seret file ke sini atau klik untuk memilih (gambar, video, dokumen, arsip, dll)"
+            disabled={uploadMutation.isPending}
           />
+          {uploadMutation.isPending && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-gray-500">
+                <span>Mengunggah...</span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all duration-200"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
           <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => setShowUpload(false)}>
+            <Button variant="outline" onClick={() => setShowUpload(false)} disabled={uploadMutation.isPending}>
               Batal
             </Button>
             <Button
               onClick={() => uploadMutation.mutate(pendingFiles)}
               disabled={pendingFiles.length === 0 || uploadMutation.isPending}
             >
-              {uploadMutation.isPending ? "Mengunggah..." : `Unggah ${pendingFiles.length} File`}
+              {uploadMutation.isPending ? `Mengunggah ${uploadProgress}%` : `Unggah ${pendingFiles.length} File`}
             </Button>
           </div>
         </div>

@@ -35,6 +35,7 @@ export default function DocumentDetailPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [changeNotes, setChangeNotes] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const { data: doc, isLoading } = useQuery<Document>({
     queryKey: ["document", id],
@@ -54,7 +55,9 @@ export default function DocumentDetailPage() {
       formData.append("file", uploadFile);
       if (changeNotes) formData.append("change_notes", changeNotes);
       return api.post(`/documents/${id}/upload`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (evt) => {
+          setUploadProgress(Math.round(evt.total ? (evt.loaded / evt.total) * 100 : 0));
+        },
       });
     },
     onSuccess: () => {
@@ -63,9 +66,13 @@ export default function DocumentDetailPage() {
       setShowUpload(false);
       setUploadFile(null);
       setChangeNotes("");
+      setUploadProgress(0);
       toast.success("File berhasil diunggah");
     },
-    onError: () => toast.error("Gagal mengunggah file"),
+    onError: () => {
+      setUploadProgress(0);
+      toast.error("Gagal mengunggah file");
+    },
   });
 
   const verifyMutation = useMutation({
@@ -339,6 +346,7 @@ export default function DocumentDetailPage() {
             <FileUpload
               onFilesSelected={(files) => setUploadFile(files[0] || null)}
               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.zip"
+              disabled={uploadMutation.isPending}
             />
             <div className="mt-4">
               <label className="mb-1.5 block text-sm font-medium">
@@ -350,8 +358,23 @@ export default function DocumentDetailPage() {
                 onChange={(e) => setChangeNotes(e.target.value)}
                 placeholder="Mis: Revisi setelah review pimpinan"
                 className="w-full rounded-md border px-3 py-2 text-sm"
+                disabled={uploadMutation.isPending}
               />
             </div>
+            {uploadMutation.isPending && (
+              <div className="mt-4 space-y-1">
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Mengunggah...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all duration-200"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="mt-6 flex justify-end gap-3">
               <Button
                 variant="outline"
@@ -360,6 +383,7 @@ export default function DocumentDetailPage() {
                   setUploadFile(null);
                   setChangeNotes("");
                 }}
+                disabled={uploadMutation.isPending}
               >
                 Batal
               </Button>
@@ -367,7 +391,7 @@ export default function DocumentDetailPage() {
                 onClick={() => uploadMutation.mutate()}
                 disabled={!uploadFile || uploadMutation.isPending}
               >
-                {uploadMutation.isPending ? "Mengunggah..." : "Upload"}
+                {uploadMutation.isPending ? `Mengunggah ${uploadProgress}%` : "Upload"}
               </Button>
             </div>
           </div>

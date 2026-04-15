@@ -41,6 +41,7 @@ export default function LetterDetailPage() {
   const [showDelete, setShowDelete] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [attachmentTitle, setAttachmentTitle] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [dispForm, setDispForm] = useState({
     to_user_id: "",
     instruction: "",
@@ -71,7 +72,9 @@ export default function LetterDetailPage() {
       formData.append("file", uploadFile);
       if (attachmentTitle) formData.append("title", attachmentTitle);
       return api.post(`/letters/${id}/attachments`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (evt) => {
+          setUploadProgress(Math.round(evt.total ? (evt.loaded / evt.total) * 100 : 0));
+        },
       });
     },
     onSuccess: () => {
@@ -79,9 +82,13 @@ export default function LetterDetailPage() {
       setShowUpload(false);
       setUploadFile(null);
       setAttachmentTitle("");
+      setUploadProgress(0);
       toast.success("Lampiran berhasil diunggah");
     },
-    onError: () => toast.error("Gagal mengunggah lampiran"),
+    onError: () => {
+      setUploadProgress(0);
+      toast.error("Gagal mengunggah lampiran");
+    },
   });
 
   const dispositionMutation = useMutation({
@@ -374,16 +381,33 @@ export default function LetterDetailPage() {
                 value={attachmentTitle}
                 onChange={(e) => setAttachmentTitle(e.target.value)}
                 placeholder="Mis: Surat Balasan"
+                disabled={uploadMutation.isPending}
               />
             </div>
             <FileUpload
               onFilesSelected={(files) => setUploadFile(files[0] || null)}
               accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip"
+              disabled={uploadMutation.isPending}
             />
+            {uploadMutation.isPending && (
+              <div className="mt-4 space-y-1">
+                <div className="flex justify-between text-xs text-gray-500">
+                  <span>Mengunggah...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className="h-full rounded-full bg-blue-500 transition-all duration-200"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
             <div className="mt-6 flex justify-end gap-3">
               <Button
                 variant="outline"
                 onClick={() => { setShowUpload(false); setUploadFile(null); setAttachmentTitle(""); }}
+                disabled={uploadMutation.isPending}
               >
                 Batal
               </Button>
@@ -391,7 +415,7 @@ export default function LetterDetailPage() {
                 onClick={() => uploadMutation.mutate()}
                 disabled={!uploadFile || uploadMutation.isPending}
               >
-                {uploadMutation.isPending ? "Mengunggah..." : "Upload"}
+                {uploadMutation.isPending ? `Mengunggah ${uploadProgress}%` : "Upload"}
               </Button>
             </div>
           </div>
