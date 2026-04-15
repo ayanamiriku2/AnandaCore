@@ -5,7 +5,9 @@ use axum::{
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 
 use crate::{
@@ -276,7 +278,7 @@ pub async fn upload_agreement_file(
     .await?
     .ok_or_else(|| AppError::NotFound("Perjanjian tidak ditemukan".into()))?;
 
-    let field = multipart
+    let mut field = multipart
         .next_field()
         .await
         .map_err(|e| AppError::BadRequest(format!("Gagal membaca multipart: {}", e)))?
@@ -295,23 +297,38 @@ pub async fn upload_agreement_file(
         )));
     }
 
-    let data = field
-        .bytes()
+    let path: PathBuf = std::env::temp_dir().join(format!("anandacore-upload-{}", Uuid::new_v4()));
+    let mut tmp = tokio::fs::File::create(&path)
         .await
-        .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?;
+        .map_err(|e| AppError::Internal(format!("Gagal membuat file sementara: {}", e)))?;
 
-    if data.len() > state.config.max_upload_size {
-        return Err(AppError::Validation(
-            "Ukuran file melebihi batas maksimum".into(),
-        ));
+    let mut total_size: usize = 0;
+    while let Some(chunk) = field
+        .chunk()
+        .await
+        .map_err(|e| AppError::BadRequest(format!("Gagal membaca file: {}", e)))?
+    {
+        total_size += chunk.len();
+        if total_size > state.config.max_upload_size {
+            let _ = tokio::fs::remove_file(&path).await;
+            return Err(AppError::Validation(
+                "Ukuran file melebihi batas maksimum".into(),
+            ));
+        }
+
+        tmp.write_all(&chunk)
+            .await
+            .map_err(|e| AppError::Internal(format!("Gagal menulis file sementara: {}", e)))?;
     }
 
-    let key = StorageService::generate_key("agreements", &file_name);
-    state
-        .storage
-        .upload(&key, data.to_vec(), &content_type)
+    tmp.flush()
         .await
-        .map_err(|e| AppError::Internal(format!("Gagal upload: {}", e)))?;
+        .map_err(|e| AppError::Internal(format!("Gagal flush file sementara: {}", e)))?;
+
+    let key = StorageService::generate_key("agreements", &file_name);
+    let upload_result = state.storage.upload_from_path(&key, &path, &content_type).await;
+    let _ = tokio::fs::remove_file(&path).await;
+    upload_result.map_err(|e| AppError::Internal(format!("Gagal upload: {}", e)))?;
 
     let updated = sqlx::query_as::<_, PartnershipAgreement>(
         r#"UPDATE partnership_agreements

@@ -85,9 +85,13 @@ export default function LetterDetailPage() {
       setUploadProgress(0);
       toast.success("Lampiran berhasil diunggah");
     },
-    onError: () => {
+    onError: (error: any) => {
       setUploadProgress(0);
-      toast.error("Gagal mengunggah lampiran");
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        "Gagal mengunggah lampiran";
+      toast.error(message);
     },
   });
 

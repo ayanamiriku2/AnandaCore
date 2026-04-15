@@ -119,9 +119,13 @@ export default function MediaAlbumDetailPage() {
       setUploadProgress(0);
       toast.success("File berhasil diunggah");
     },
-    onError: () => {
+    onError: (error: any) => {
       setUploadProgress(0);
-      toast.error("Gagal mengunggah file");
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        "Gagal mengunggah file";
+      toast.error(message);
     },
   });
 
